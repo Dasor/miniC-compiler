@@ -1,0 +1,146 @@
+// Lexer.cpp
+#include <algorithm>
+#include <string>
+#include "lexer.h"
+#include <cctype>
+#include <iostream>
+
+Lexer::Lexer(const std::string& input)
+    : source(input), index(0), line(1), column(1) {}
+
+char Lexer::currentChar() const {
+    return index < source.size() ? source[index] : '\0';
+}
+
+void Lexer::advance() {
+    if (index < source.size()) {
+        ++index;
+        ++column;
+    }
+}
+
+bool Lexer::isAtEnd() const {
+    return index >= source.size();
+}
+
+// Define gettok and the rest of the methods here...
+Token Lexer::gettok() {
+    skipWhitespaceAndComments();
+
+    if (isAtEnd()) {
+        return Token(TokenKind::EOF_TOK, "", line, column);
+    }
+
+    char c = currentChar();
+
+    if (std::isalpha(c) || c == '_') {
+        return lexIdentifierOrKeyword();
+    }
+
+    if (std::isdigit(c)) {
+        return lexNumber();
+    }
+
+    if (c == '"') {
+        return lexStringLiteral();
+    }
+
+    if (c == '\'') {
+        return lexCharLiteral();
+    }
+
+    return lexOperatorOrPunctuator(); // Handles +, -, ==, etc.
+}
+
+void Lexer::skipWhitespaceAndComments() {
+    while (!isAtEnd()) {
+        char c = currentChar();
+        if (std::isspace(c)) {
+            if (c == '\n') { ++line; column = 0; }
+            advance();
+        } else if (c == '/' && source[index + 1] == '/') {
+            while (!isAtEnd() && currentChar() != '\n') advance();
+        } else if (c == '/' && source[index + 1] == '*') {
+            advance(); advance(); // skip /*
+            while (!isAtEnd() && !(currentChar() == '*' && source[index + 1] == '/')) {
+                if (currentChar() == '\n') { ++line; column = 0; }
+                advance();
+            }
+            if (!isAtEnd()) { advance(); advance(); } // skip */
+        } else {
+            break;
+        }
+    }
+}
+
+Token Lexer::lexIdentifierOrKeyword() {
+    size_t start = index;
+    while (std::isalnum(currentChar()) || currentChar() == '_') advance();
+
+    std::string text = source.substr(start, index - start);
+
+    // Check if it's a keyword
+    static const std::unordered_map<std::string, TokenKind> keywords = {
+        #define KEYWORD(str, enum_name, description) {str, TokenKind::enum_name},
+        #include "keywords.def"
+        #undef KEYWORD
+    };
+
+    auto it = keywords.find(text);
+    TokenKind kind = (it != keywords.end()) ? it->second : TokenKind::Identifier;
+
+    Token tok(kind, text, line, column);
+    tok.stringValue = text;
+    return tok;
+}
+
+Token Lexer::lexNumber() {
+    size_t start = index;
+    while (std::isdigit(currentChar())) advance();
+
+    std::string text = source.substr(start, index - start);
+    Token tok(TokenKind::IntegerLiteral, text, line, column);
+    tok.intValue = std::stoll(text); // Can throw — add error handling as needed
+    return tok;
+}
+
+Token Lexer::lexStringLiteral() {
+    advance(); // skip opening quote
+    size_t start = index;
+    while (!isAtEnd() && currentChar() != '"') {
+        if (currentChar() == '\\') advance(); // skip escape character
+        advance();
+    }
+    std::string text = source.substr(start, index - start);
+    advance(); // skip closing quote
+    return Token(TokenKind::StringLiteral, text, line, column);
+}
+
+Token Lexer::lexCharLiteral() {
+    advance(); // skip opening quote
+    size_t start = index;
+    while (!isAtEnd() && currentChar() != '\'') {
+        if (currentChar() == '\\') advance(); // skip escape character
+        advance();
+    }
+    std::string text = source.substr(start, index - start);
+    advance(); // skip closing quote
+    return Token(TokenKind::CharacterLiteral, text, line, column);
+}
+
+Token Lexer::lexOperatorOrPunctuator() {
+    char c = currentChar();
+    TokenKind kind;
+
+    switch (c) {
+        case '+': kind = TokenKind::Plus; break;
+        case '-': kind = TokenKind::Minus; break;
+        case '*': kind = TokenKind::Star; break;
+        case '/': kind = TokenKind::Slash; break;
+        // Add more operators and punctuators...
+        default: kind = TokenKind::Unknown; break;
+    }
+
+    advance(); // consume the operator/punctuator
+    return Token(kind, std::string(1, c), line, column);
+}
