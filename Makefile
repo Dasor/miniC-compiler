@@ -3,10 +3,10 @@ CXX := g++
 CXXFLAGS := -std=c++17 -Wall -Wextra -g
 
 # Output binary name
-TARGET := lexer
+TARGET := comp
 
 # Source files
-SRCS := main.cpp lexer.cpp
+SRCS := main.cpp lexer.cpp parser.cpp
 
 # Object files (replace .cpp with .o)
 OBJS := $(SRCS:.cpp=.o)

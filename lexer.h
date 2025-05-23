@@ -20,58 +20,12 @@ enum class TokenKind {
     #include "keywords.def"
     #undef KEYWORD
 
-    // Operators
-    Plus,           // +
-    Minus,          // -
-    Star,           // *
-    Slash,          // /
-    Percent,        // %
-    PlusPlus,       // ++
-    MinusMinus,     // --
-    Arrow,          // ->
-    Amp,            // &
-    Bar,            // |
-    Caret,          // ^
-    Tilde,          // ~
-    Exclaim,        // !
-    AmpAmp,         // &&
-    BarBar,         // ||
-    Question,       // ?
-    Colon,          // :
-    Assign,         // =
-    PlusEqual,      // +=
-    MinusEqual,     // -=
-    StarEqual,      // *=
-    SlashEqual,     // /=
-    PercentEqual,   // %=
-    AmpEqual,       // &=
-    BarEqual,       // |=
-    CaretEqual,     // ^=
-    Less,           // <
-    Greater,        // >
-    LessEqual,      // <=
-    GreaterEqual,   // >=
-    EqualEqual,     // ==
-    NotEqual,       // !=
+    // Operators and Punctuation
+    #define OPERATOR(str,enum_name, description) enum_name,
+    #include "operators.def"
+    #undef OPERATOR
 
-    // Punctuation
-    LParen,         // (
-    RParen,         // )
-    LBracket,       // [
-    RBracket,       // ]
-    LBrace,         // {
-    RBrace,         // }
-    Semicolon,      // ;
-    Comma,          // ,
-    Dot,            // .
-    Ellipsis,       // ...
-
-    // Preprocessor (if you want to tokenize directives)
-    Hash,           // #
-    HashHash,       // ##
-    // Note: you may also choose to handle entire preprocessor lines as a single token.
-
-    // (Optional) comments and whitespace if you need to preserve them for macros
+    // Special tokens
     Comment,
     Whitespace,
     Unknown
@@ -84,6 +38,8 @@ struct Token {
     int64_t intValue;
     std::string stringValue;
 
+    Token() : kind(TokenKind::Unknown), lexeme(""), line(0), column(0), intValue(0) {}
+    
     Token(TokenKind kind, const std::string& lexeme, size_t line, size_t column)
         : kind(kind), lexeme(lexeme), line(line), column(column), intValue(0) {}
 };

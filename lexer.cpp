@@ -129,18 +129,27 @@ Token Lexer::lexCharLiteral() {
 }
 
 Token Lexer::lexOperatorOrPunctuator() {
-    char c = currentChar();
-    TokenKind kind;
+    // Create operator lookup table from X macros
+    static const std::unordered_map<std::string, TokenKind> operators = {
+        #define OPERATOR(str, enum_name, description) {str, TokenKind::enum_name},
+        #include "operators.def"
+        #undef OPERATOR
+    };
 
-    switch (c) {
-        case '+': kind = TokenKind::Plus; break;
-        case '-': kind = TokenKind::Minus; break;
-        case '*': kind = TokenKind::Star; break;
-        case '/': kind = TokenKind::Slash; break;
-        // Add more operators and punctuators...
-        default: kind = TokenKind::Unknown; break;
+    // Try matching longest possible operator first (max 3 chars)
+    std::string lexeme;
+    for (int len = 3; len >= 1; len--) {
+        if (index + len > source.size()) continue;
+        
+        lexeme = source.substr(index, len);
+        auto it = operators.find(lexeme);
+        if (it != operators.end()) {
+            for (int i = 0; i < len; i++) advance();
+            return Token(it->second, lexeme, line, column);
+        }
     }
 
-    advance(); // consume the operator/punctuator
-    return Token(kind, std::string(1, c), line, column);
+    // No match found
+    advance();
+    return Token(TokenKind::Unknown, std::string(1, currentChar()), line, column);
 }
