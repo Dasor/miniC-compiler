@@ -23,6 +23,7 @@ private:
     void nextToken();
     bool expect(TokenKind kind);
     bool match(TokenKind kind);
+    void MainLoop();
 
     // Expression parsing
     std::unique_ptr<Expr> parsePrimary();

@@ -4,65 +4,73 @@
 #include <vector>
 #include <unordered_map>
 
-enum class TokenKind {
-    // End-of-file
-    EOF_TOK,
+namespace miniC
+{
 
-    // Identifiers and literals
-    Identifier,            // e.g. foo, _bar, x123
-    IntegerLiteral,        // decimal, octal, hex, (and optionally binary)
-    FloatingLiteral,       // e.g. 3.14, .5, 1e9
-    CharacterLiteral,      // e.g. 'a', '\n'
-    StringLiteral,         // e.g. "hello\n"
+    enum class TokenKind
+    {
+        // End-of-file
+        EOF_TOK,
 
-    // Keywords
-    #define KEYWORD(str,enum_name, description) enum_name,
-    #include "keywords.def"
-    #undef KEYWORD
+        // Identifiers and literals
+        Identifier,       // e.g. foo, _bar, x123
+        IntegerLiteral,   // decimal, octal, hex, (and optionally binary)
+        FloatingLiteral,  // e.g. 3.14, .5, 1e9
+        CharacterLiteral, // e.g. 'a', '\n'
+        StringLiteral,    // e.g. "hello\n"
 
-    // Operators and Punctuation
-    #define OPERATOR(str,enum_name, description) enum_name,
-    #include "operators.def"
-    #undef OPERATOR
+// Keywords
+#define KEYWORD(str, enum_name, description) enum_name,
+#include "keywords.def"
+#undef KEYWORD
 
-    // Special tokens
-    Comment,
-    Whitespace,
-    Unknown
-};
+// Operators and Punctuation
+#define OPERATOR(str, enum_name, description) enum_name,
+#include "operators.def"
+#undef OPERATOR
 
-struct Token {
-    TokenKind kind;
-    std::string lexeme;
-    size_t line, column;
-    int64_t intValue;
-    std::string stringValue;
+        // Special tokens
+        Comment,
+        Whitespace,
+        Unknown
+    };
 
-    Token() : kind(TokenKind::Unknown), lexeme(""), line(0), column(0), intValue(0) {}
-    
-    Token(TokenKind kind, const std::string& lexeme, size_t line, size_t column)
-        : kind(kind), lexeme(lexeme), line(line), column(column), intValue(0) {}
-};
+    struct Token
+    {
+        TokenKind kind;
+        std::string lexeme;
+        size_t line, column;
+        int64_t intValue;
+        std::string stringValue;
 
-class Lexer {
-public:
-    Lexer(const std::string& input);
+        Token() : kind(TokenKind::Unknown), lexeme(""), line(0), column(0), intValue(0) {}
 
-    Token gettok();
+        Token(TokenKind kind, const std::string &lexeme, size_t line, size_t column)
+            : kind(kind), lexeme(lexeme), line(line), column(column), intValue(0) {}
+    };
 
-private:
-    std::string source;
-    size_t index;
-    size_t line, column;
+    class Lexer
+    {
+    public:
+        Lexer(const std::string &input);
 
-    char currentChar() const;
-    void advance();
-    bool isAtEnd() const;
+        Token gettok();
 
-    void skipWhitespaceAndComments();
-    Token lexIdentifierOrKeyword();
-    Token lexNumber();
-    Token lexStringLiteral();
-    Token lexCharLiteral();
-    Token lexOperatorOrPunctuator();
-};
+    private:
+        std::string source;
+        size_t index;
+        size_t line, column;
+
+        char currentChar() const;
+        void advance();
+        bool isAtEnd() const;
+
+        void skipWhitespaceAndComments();
+        Token lexIdentifierOrKeyword();
+        Token lexNumber();
+        Token lexStringLiteral();
+        Token lexCharLiteral();
+        Token lexOperatorOrPunctuator();
+    };
+
+}

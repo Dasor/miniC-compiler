@@ -1,6 +1,9 @@
 #include "lexer.h"
+#include "parser.h"
 #include <iostream>
 #include <string>
+
+using namespace miniC;
 
 int main() {
     // Read from standard input
@@ -11,10 +14,8 @@ int main() {
     }
 
     // Lexer demonstration
-    Lexer lexer(code);
-    while (true) {
-        Token tok = lexer.gettok();
-        std::cout << "Token: " << static_cast<int>(tok.kind) << " '" << tok.lexeme << "'\n";
-        if (tok.kind == TokenKind::EOF_TOK) break;
-    }
+    Lexer lexer = Lexer(code);
+    Parser parser(lexer);
+
+
 }

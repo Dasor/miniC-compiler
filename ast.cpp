@@ -3,36 +3,48 @@
 using namespace miniC;
 using namespace llvm;
 
+// Initialize static members
+std::unique_ptr<llvm::LLVMContext> ASTVisitor::context = std::make_unique<llvm::LLVMContext>();
+std::unique_ptr<llvm::Module> ASTVisitor::module = std::make_unique<llvm::Module>("miniC", *ASTVisitor::context);
+std::unique_ptr<llvm::IRBuilder<>> ASTVisitor::builder = std::make_unique<llvm::IRBuilder<>>(*ASTVisitor::context);
+std::map<std::string, llvm::Value *> ASTVisitor::namedValues;
+const std::map<miniC::Type, llvm::Type *> ASTVisitor::typeMap = {
+    {miniC::Type::Int, llvm::Type::getInt32Ty(*ASTVisitor::context)},
+    {miniC::Type::Float, llvm::Type::getFloatTy(*ASTVisitor::context)},
+    {miniC::Type::Char, llvm::Type::getInt8Ty(*ASTVisitor::context)},
+    {miniC::Type::String, llvm::ArrayType::get(llvm::Type::getInt8Ty(*ASTVisitor::context), 0)},
+    {miniC::Type::Void, llvm::Type::getVoidTy(*ASTVisitor::context)},
+    {miniC::Type::Unknown, nullptr}};
 // Accept method implementations for AST nodes
 
 Value *BinaryExpr::accept(ASTVisitor &visitor)
 {
-    visitor.visit(*this);
+    return visitor.visit(*this);
 }
 
 Value *LiteralExpr::accept(ASTVisitor &visitor)
 {
-    visitor.visit(*this);
+    return visitor.visit(*this);
 }
 
 Value *VarExpr::accept(ASTVisitor &visitor)
 {
-    visitor.visit(*this);
+    return visitor.visit(*this);
 }
 
 Value *CallExpr::accept(ASTVisitor &visitor)
 {
-    visitor.visit(*this);
+    return visitor.visit(*this);
 }
 
 llvm::Function *miniC::Function::accept(ASTVisitor &visitor)
 {
-    visitor.visit(*this);
+    return visitor.visit(*this);
 }
 
 llvm::Function *Prototype::accept(ASTVisitor &visitor)
 {
-    visitor.visit(*this);
+    return visitor.visit(*this);
 }
 
 // Visitor method implementations
@@ -41,110 +53,291 @@ Value *ASTVisitor::visit(LiteralExpr &expr)
 {
     switch (expr.type)
     {
-        {
-        case TokenKind::IntegerLiteral:
-            // Cast string value to int
-            int intValue = std::stoi(expr.value);
-            return ConstantInt::get(Type::getInt64Ty(*context), intValue);
-            break;
-        case TokenKind::FloatingLiteral:
-            // Cast string value to float
-            float floatValue = std::stof(expr.value);
-            return ConstantFP::get(Type::getFloatTy(*context), floatValue);
-            break;
-        case TokenKind::CharacterLiteral:
-            // Cast string value to char
-            char charValue = expr.value[1]; // Assuming single character literal
-            return ConstantInt::get(Type::getInt8Ty(*context), charValue);
-            break;
-        case TokenKind::StringLiteral:
-            return ConstantDataArray::getString(*context, expr.value, true);
-            break;
-        default:
-            break;
-        }
+    case TokenKind::IntegerLiteral:
+        expr.setType(Type::Int);
+        return ConstantInt::get(llvm::Type::getInt32Ty(*context), std::stoi(expr.value));
+    case TokenKind::FloatingLiteral:
+        expr.setType(Type::Float);
+        return ConstantFP::get(llvm::Type::getFloatTy(*context), std::stof(expr.value));
+    case TokenKind::CharacterLiteral:
+        expr.setType(Type::Char);
+        return ConstantInt::get(llvm::Type::getInt8Ty(*context), expr.value[1]);
+    case TokenKind::StringLiteral:
+        expr.setType(Type::String);
+        return ConstantDataArray::getString(*context, expr.value, true);
+    default:
+        expr.setType(Type::Unknown);
+        return nullptr;
     }
 }
 
-    Value *ASTVisitor::visit(VarExpr & expr)
+Value *ASTVisitor::visit(VarExpr &expr)
+{
+    Value *V = namedValues[expr.name];
+    if (!V)
     {
-        Value *V = namedValues[expr.name];
-        if (!V)
-        {
-            // Variable not found
-            return nullptr;
-        }
-        return V;
+        // Variable not found
+        return nullptr;
+    }
+    return V;
+}
+
+Value *ASTVisitor::visit(BinaryExpr &expr)
+{
+    Value *LHS = expr.lhs->accept(*this);
+    Value *RHS = expr.rhs->accept(*this);
+
+    if (!LHS || !RHS)
+    {
+        return nullptr;
     }
 
-    Value *ASTVisitor::visit(BinaryExpr & expr)
+    // Get types of operands
+    Type lhsType = expr.lhs->getType();
+    Type rhsType = expr.rhs->getType();
+
+    // Type checking and conversion
+    if (lhsType != rhsType)
     {
-        Value *LHS = expr.lhs->accept(*this);
-        Value *RHS = expr.rhs->accept(*this);
-
-        if (!LHS || !RHS)
+        // Handle type conversion if needed
+        if (lhsType == Type::Float || rhsType == Type::Float)
         {
-            // Error handling
-            return nullptr;
-        }
-
-        switch (expr.op)
-        {
-        // TODO: add all operators, perhaps expand the def file to use a X macro
-        case TokenKind::Plus:
-            return builder->CreateAdd(LHS, RHS, "addtmp");
-            break;
-        case TokenKind::Minus:
-            return builder->CreateSub(LHS, RHS, "subtmp");
-            break;
-        case TokenKind::Star:
-            return builder->CreateMul(LHS, RHS, "multmp");
-            break;
-        case TokenKind::Slash:
-            return builder->CreateSDiv(LHS, RHS, "divtmp");
-            break;
-        default:
-            return nullptr; // Unsupported operator
-            break;
-        }
-    }
-
-    Value *ASTVisitor::visit(CallExpr & expr)
-    {
-        llvm::Function *calleeF = module->getFunction(expr.callee);
-        if (!calleeF)
-        {
-            // Function not found
-            return nullptr;
-        }
-        // Check arguments are correct
-        if (calleeF->arg_size() != expr.args.size())
-        {
-            // Argument count mismatch
-            return nullptr;
-        }
-        // TODO: check argument types
-
-        std::vector<llvm::Value *> argsV;
-        for (auto &arg : expr.args)
-        {
-            llvm::Value *argV = arg->accept(*this);
-            if (!argV)
+            if (lhsType != Type::Float)
             {
-                // Error handling
-                return nullptr;
+                LHS = builder->CreateSIToFP(LHS, llvm::Type::getFloatTy(*context), "convfloat");
             }
-            argsV.push_back(argV);
+            if (rhsType != Type::Float)
+            {
+                RHS = builder->CreateSIToFP(RHS, llvm::Type::getFloatTy(*context), "convfloat");
+            }
+            expr.setType(Type::Float);
         }
-        return builder->CreateCall(calleeF, argsV, "calltmp");
+        else
+        {
+            // Type mismatch that can't be converted
+            return nullptr;
+        }
+    }
+    else
+    {
+        expr.setType(lhsType);
     }
 
-    llvm::Function *ASTVisitor::visit(Function & func)
+    // Generate IR based on operation and types
+    switch (expr.op)
     {
-        // Default implementation does nothing
+    case TokenKind::Plus:
+        if (expr.getType() == Type::Float)
+        {
+            return builder->CreateFAdd(LHS, RHS, "faddtmp");
+        }
+        else
+        {
+            return builder->CreateAdd(LHS, RHS, "addtmp");
+        }
+    case TokenKind::Minus:
+        if (expr.getType() == Type::Float)
+        {
+            return builder->CreateFSub(LHS, RHS, "fsubtmp");
+        }
+        else
+        {
+            return builder->CreateSub(LHS, RHS, "subtmp");
+        }
+    case TokenKind::Star:
+        if (expr.getType() == Type::Float)
+        {
+            return builder->CreateFMul(LHS, RHS, "fmultmp");
+        }
+        else
+        {
+            return builder->CreateMul(LHS, RHS, "multmp");
+        }
+    case TokenKind::Slash:
+        if (expr.getType() == Type::Float)
+        {
+            return builder->CreateFDiv(LHS, RHS, "fdivtmp");
+        }
+        else
+        {
+            return builder->CreateSDiv(LHS, RHS, "divtmp");
+        }
+    default:
+        return nullptr;
+    }
+}
+
+Value *ASTVisitor::visit(CallExpr &expr)
+{
+    // Get function from module
+    llvm::Function *calleeF = module->getFunction(expr.callee);
+    if (!calleeF)
+    {
+        return nullptr; // Function not found
     }
 
-    llvm::Function *ASTVisitor::visit(Prototype & proto)
+    // Check argument count matches
+    if (calleeF->arg_size() != expr.args.size())
     {
-        // Default implementation does nothing
+        return nullptr; // Argument count mismatch
     }
+
+    // Process arguments with type checking
+    std::vector<Value *> argsV;
+    for (unsigned i = 0; i < expr.args.size(); i++)
+    {
+        Value *argV = expr.args[i]->accept(*this);
+        if (!argV)
+            return nullptr;
+
+        // Get expected and actual types
+        llvm::Type *expectedTy = calleeF->getFunctionType()->getParamType(i);
+        llvm::Type *actualTy = argV->getType();
+
+        // Handle type conversions
+        if (actualTy != expectedTy)
+        {
+            if (actualTy->isIntegerTy() && expectedTy->isFloatingPointTy())
+            {
+                argV = builder->CreateSIToFP(argV, expectedTy, "convtmp");
+            }
+            else if (actualTy->isFloatingPointTy() && expectedTy->isIntegerTy())
+            {
+                argV = builder->CreateFPToSI(argV, expectedTy, "convtmp");
+            }
+            else
+            {
+                return nullptr; // Incompatible types
+            }
+        }
+        argsV.push_back(argV);
+    }
+
+    expr.setType(Type::Int); // Assume functions return int for now
+    return builder->CreateCall(calleeF, argsV, "calltmp");
+}
+
+llvm::Function *ASTVisitor::visit(Function &func)
+{
+    // Create function from prototype
+    llvm::Function *F = func.proto->accept(*this);
+    if (!F)
+        return nullptr;
+
+    // Create entry block
+    BasicBlock *BB = BasicBlock::Create(*context, "entry", F);
+    builder->SetInsertPoint(BB);
+
+    // Add arguments to symbol table
+    for (auto &Arg : F->args())
+    {
+        namedValues[std::string(Arg.getName())] = &Arg;
+    }
+
+    // Generate function body
+    if (Value *RetVal = func.body->accept(*this))
+    {
+        // Create return
+        builder->CreateRet(RetVal);
+
+        // Verify function
+        if (verifyFunction(*F))
+        {
+            F->eraseFromParent();
+            return nullptr;
+        }
+        return F;
+    }
+
+    // Error occurred
+    F->eraseFromParent();
+    return nullptr;
+}
+
+llvm::Function *ASTVisitor::visit(Prototype &proto)
+{
+    // Default implementation does nothing
+    std::vector<llvm::Type *> argTypes;
+    for (auto &arg : proto.params)
+    {
+        llvm::Type *ty = typeMap.at(arg.getType());
+        if (!ty)
+        {
+            return nullptr; // Handle unknown types
+        }
+        argTypes.push_back(ty);
+    }
+
+    llvm::Type *returnType = typeMap.at(proto.returnType);
+    if (!returnType)
+    {
+        return nullptr; // Handle unknown return type
+    }
+    llvm::FunctionType *funcType = llvm::FunctionType::get(
+        returnType, argTypes, false);
+
+    // Create function
+    llvm::Function *func = llvm::Function::Create(
+        funcType,
+        llvm::Function::ExternalLinkage,
+        proto.name,
+        module.get());
+
+    // Set parameter names
+    unsigned idx = 0;
+    for (auto &arg : func->args())
+    {
+        arg.setName(proto.params[idx++].name);
+    }
+
+    return func;
+}
+
+bool VarExpr::typeCheck()
+{
+    return true;
+    /*// Check if variable is defined
+    if (namedValues.find(name) == namedValues.end()) {
+        std::cerr << "Error: Variable '" << name << "' is not defined." << std::endl;
+        return false;
+    }
+
+    // Set the type based on the variable's definition
+    type = namedValues[name]->getType();
+    return true;*/
+}
+
+bool LiteralExpr::typeCheck()
+{
+    // Literal expressions are always valid
+    return true;
+}
+
+bool BinaryExpr::typeCheck()
+{
+    // Check if both operands are valid
+    if (!lhs->typeCheck() || !rhs->typeCheck())
+    {
+        return false;
+    }
+
+    // Set the type based on the operation
+    if (op == TokenKind::Plus || op == TokenKind::Minus || op == TokenKind::Star || op == TokenKind::Slash)
+    {
+        if (lhs->getType() == Type::Float || rhs->getType() == Type::Float)
+        {
+            setType(Type::Float);
+        }
+        else
+        {
+            setType(Type::Int);
+        }
+    }
+    else
+    {
+        // Unsupported operation
+        return false;
+    }
+
+    return true;
+}

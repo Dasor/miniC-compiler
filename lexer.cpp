@@ -5,6 +5,8 @@
 #include <cctype>
 #include <iostream>
 
+using namespace miniC;
+
 Lexer::Lexer(const std::string& input)
     : source(input), index(0), line(1), column(1) {}
 
