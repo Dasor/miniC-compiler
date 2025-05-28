@@ -10,6 +10,14 @@ using namespace miniC;
 Lexer::Lexer(const std::string& input)
     : source(input), index(0), line(1), column(1) {}
 
+// Create constructor for stdin
+Lexer::Lexer()
+    : source(""), index(0), line(1), column(1) {
+    std::string input;
+    std::getline(std::cin, input, '\0'); // Read until EOF
+    source = input;
+}
+
 char Lexer::currentChar() const {
     return index < source.size() ? source[index] : '\0';
 }

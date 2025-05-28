@@ -9,6 +9,7 @@ namespace miniC {
 class Parser {
 public:
     explicit Parser(Lexer &lexer) : lexer(lexer) {}
+    void MainLoop();
 
     // Main parsing interface
     std::unique_ptr<Function> parseFunction();
@@ -23,7 +24,7 @@ private:
     void nextToken();
     bool expect(TokenKind kind);
     bool match(TokenKind kind);
-    void MainLoop();
+    bool match(TokenKind lower, TokenKind upper);
 
     // Expression parsing
     std::unique_ptr<Expr> parsePrimary();

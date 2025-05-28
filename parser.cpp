@@ -1,5 +1,6 @@
 // parser.cpp - Recursive descent parser implementation
 #include "parser.h"
+#include "ast.h"
 #include <stdexcept>
 
 using namespace miniC;
@@ -22,6 +23,11 @@ bool Parser::expect(TokenKind kind)
 bool Parser::match(TokenKind kind)
 {
     return currentToken.kind == kind;
+}
+
+bool Parser::match(TokenKind lower, TokenKind upper)
+{
+    return (currentToken.kind >= lower && currentToken.kind <= upper);
 }
 
 int Parser::getTokenPrecedence(TokenKind op)
@@ -142,89 +148,121 @@ std::unique_ptr<Expr> Parser::parseBinOpRHS(int precedence, std::unique_ptr<Expr
 
         lhs = std::make_unique<BinaryExpr>(std::move(lhs), op, std::move(rhs));
     }
-
-
 }
 
-std::unique_ptr<Prototype> Parser::parsePrototype() {
+std::unique_ptr<Prototype> Parser::parsePrototype()
+{
+
+    // Parse return type (default to int if not specified)
+    Type returnType = Type::Int;
+    if (match(TokenKind::Kw_Int, TokenKind::Kw_Void))
+    {
+        switch (currentToken.kind)
+        {
+        case TokenKind::Kw_Int:
+            returnType = Type::Int;
+            break;
+        case TokenKind::Kw_Float:
+            returnType = Type::Float;
+            break;
+        case TokenKind::Kw_Char:
+            returnType = Type::Char;
+            break;
+        case TokenKind::Kw_Void:
+            returnType = Type::Void;
+            break;
+        default:
+            throw std::runtime_error("Unexpected return type");
+        }
+    }
+    else
+    {
+        // throw warning
+    }
+
+    nextToken(); // Eat the type keyword
+
     // Parse function name
     std::string name;
-    if (currentToken.kind == TokenKind::Identifier) {
+    if (currentToken.kind == TokenKind::Identifier)
+    {
         name = currentToken.lexeme;
         nextToken();
-    } else {
+    }
+    else
+    {
         throw std::runtime_error("Expected function name");
     }
 
     // Parse parameters
     std::vector<VarExpr> params;
-    if (!expect(TokenKind::LParen)) {
+    if (!expect(TokenKind::LParen))
+    {
         throw std::runtime_error("Expected '(' in prototype");
     }
 
-    while (!match(TokenKind::RParen)) {
-        if (currentToken.kind == TokenKind::Identifier) {
+    while (!match(TokenKind::RParen))
+    {
+        if (currentToken.kind == TokenKind::Identifier)
+        {
             params.emplace_back(currentToken.lexeme);
             nextToken();
-            
-            if (match(TokenKind::Comma)) {
+
+            if (match(TokenKind::Comma))
+            {
                 nextToken();
             }
-        } else {
+        }
+        else
+        {
             throw std::runtime_error("Expected parameter name");
         }
     }
     nextToken(); // Eat ')'
 
-    // Parse return type (default to int if not specified)
-    Type returnType = Type::Int;
-    if (match(TokenKind::Colon)) {
-        nextToken();
-        if (currentToken.kind == TokenKind::Identifier) {
-            std::string typeStr = currentToken.lexeme;
-            if (typeStr == "int") {
-                returnType = Type::Int;
-            } else if (typeStr == "float") {
-                returnType = Type::Float;
-            } else if (typeStr == "char") {
-                returnType = Type::Char;
-            } else if (typeStr == "void") {
-                returnType = Type::Void;
-            }
-            nextToken();
-        } else {
-            throw std::runtime_error("Expected return type");
-        }
-    }
-
     return std::make_unique<Prototype>(name, std::move(params), returnType);
 }
 
-std::unique_ptr<Function> Parser::parseFunction() {
+std::unique_ptr<Function> Parser::parseFunction()
+{
     // Parse prototype
     auto proto = parsePrototype();
-    if (!proto) {
+    if (!proto)
+    {
         return nullptr;
     }
 
     // Parse function body
-    if (!expect(TokenKind::LBrace)) {
+    if (!expect(TokenKind::LBrace))
+    {
         throw std::runtime_error("Expected '{' in function definition");
     }
 
+    if(match(TokenKind::RBrace))
+    {
+        if(proto->returnType != Type::Void)
+        {
+            throw std::runtime_error("Function with non-void return type cannot have an empty body");
+        }
+        nextToken(); // Empty function body
+        return std::make_unique<Function>(std::move(proto), nullptr);
+    }
+
     auto body = parseExpression();
-    if (!body) {
+    if (!body)
+    {
         throw std::runtime_error("Expected function body");
     }
 
-    if (!expect(TokenKind::RBrace)) {
+    if (!expect(TokenKind::RBrace))
+    {
         throw std::runtime_error("Expected '}' in function definition");
     }
 
     return std::make_unique<Function>(std::move(proto), std::move(body));
 }
 
-/// top ::= definition | expression 
+/// top ::= definition | expression
 void Parser::MainLoop()
 {
     while (true)
@@ -234,7 +272,7 @@ void Parser::MainLoop()
         if (currentToken.kind == TokenKind::EOF_TOK)
             break;
 
-        if (currentToken.kind == TokenKind::Kw_Int )
+        if (currentToken.kind >= TokenKind::Kw_Int && currentToken.kind <= TokenKind::Kw_Void)
         {
             parseFunction();
         }

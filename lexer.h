@@ -53,6 +53,7 @@ namespace miniC
     {
     public:
         Lexer(const std::string &input);
+        Lexer();
 
         Token gettok();
 
