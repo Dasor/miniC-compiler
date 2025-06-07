@@ -3,7 +3,16 @@
 #include "ast.h"
 #include <stdexcept>
 
+// define macro for expect semicolon
+#define EXPECT_SEMICOLON() \
+    if (!expect(TokenKind::Semicolon)) { \
+        throw std::runtime_error("Expected ';' after expression"); \
+    }
+
 using namespace miniC;
+
+// define IRGenerator visitor
+IRGenerator visitor;
 
 void Parser::nextToken()
 {
@@ -101,8 +110,8 @@ std::unique_ptr<Expr> Parser::parseIdentifierExpr()
 
 std::unique_ptr<Expr> Parser::parseLiteralExpr()
 {
-    auto value = currentToken.lexeme;
     auto type = currentToken.kind;
+    std::string value = currentToken.lexeme;
     nextToken();
     return std::make_unique<LiteralExpr>(value, type);
 }
@@ -115,13 +124,20 @@ std::unique_ptr<Expr> Parser::parseParenExpr()
     {
         throw std::runtime_error("Expected ')'");
     }
+    EXPECT_SEMICOLON();
     return expr;
 }
 
 std::unique_ptr<Expr> Parser::parseExpression()
 {
+    // Just eat the return, control flow not yet implemented
+    if (currentToken.kind == TokenKind::Kw_Return)
+        nextToken();
+
     auto lhs = parsePrimary();
-    return parseBinOpRHS(0, std::move(lhs));
+    auto expr = parseBinOpRHS(0, std::move(lhs));
+    EXPECT_SEMICOLON();
+    return expr;
 }
 
 std::unique_ptr<Expr> Parser::parseBinOpRHS(int precedence, std::unique_ptr<Expr> lhs)
@@ -238,9 +254,9 @@ std::unique_ptr<Function> Parser::parseFunction()
         throw std::runtime_error("Expected '{' in function definition");
     }
 
-    if(match(TokenKind::RBrace))
+    if (match(TokenKind::RBrace))
     {
-        if(proto->returnType != Type::Void)
+        if (proto->returnType != Type::Void)
         {
             throw std::runtime_error("Function with non-void return type cannot have an empty body");
         }
@@ -267,14 +283,22 @@ void Parser::MainLoop()
 {
     while (true)
     {
-        fprintf(stderr, ">");
         nextToken();
         if (currentToken.kind == TokenKind::EOF_TOK)
             break;
 
         if (currentToken.kind >= TokenKind::Kw_Int && currentToken.kind <= TokenKind::Kw_Void)
         {
-            parseFunction();
+            if (auto FnAST = parseFunction())
+            {
+                if (auto FnIR = FnAST->accept(visitor))
+                {
+                    // Handle the generated IR for the function
+                    fprintf(stderr, "Generated IR for function: %s\n", FnAST->proto->name.c_str());
+                    FnIR->print(llvm::errs());
+                    fprintf(stderr, "\n");
+                }
+            }
         }
         else if (currentToken.kind == TokenKind::Identifier || currentToken.kind == TokenKind::IntegerLiteral ||
                  currentToken.kind == TokenKind::FloatingLiteral || currentToken.kind == TokenKind::CharacterLiteral ||

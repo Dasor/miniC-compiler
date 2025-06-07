@@ -100,18 +100,48 @@ Token Lexer::lexIdentifierOrKeyword() {
     TokenKind kind = (it != keywords.end()) ? it->second : TokenKind::Identifier;
 
     Token tok(kind, text, line, column);
-    tok.stringValue = text;
     return tok;
 }
 
 Token Lexer::lexNumber() {
     size_t start = index;
+    bool isFloat = false;
+
+    // Consume digits before the decimal point
     while (std::isdigit(currentChar())) advance();
 
+    // Check for a decimal point
+    if (currentChar() == '.') {
+        isFloat = true;
+        advance(); // Consume the '.'
+
+        // Consume digits after the decimal point
+        while (std::isdigit(currentChar())) advance();
+    }
+
+    // Check for scientific notation (e.g., 1e10, 3.14E-2)
+    if (currentChar() == 'e' || currentChar() == 'E') {
+        isFloat = true;
+        advance(); // Consume 'e' or 'E'
+
+        // Optional sign after 'e' or 'E'
+        if (currentChar() == '+' || currentChar() == '-') {
+            advance();
+        }
+
+        // Consume digits in the exponent
+        while (std::isdigit(currentChar())) advance();
+    }
+
     std::string text = source.substr(start, index - start);
-    Token tok(TokenKind::IntegerLiteral, text, line, column);
-    tok.intValue = std::stoll(text); // Can throw — add error handling as needed
-    return tok;
+
+    if (isFloat) {
+        Token tok(TokenKind::FloatingLiteral, text, line, column);
+        return tok;
+    } else {
+        Token tok(TokenKind::IntegerLiteral, text, line, column);
+        return tok;
+    }
 }
 
 Token Lexer::lexStringLiteral() {

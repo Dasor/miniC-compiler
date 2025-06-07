@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <variant>
 
 namespace miniC
 {
@@ -40,13 +41,11 @@ namespace miniC
         TokenKind kind;
         std::string lexeme;
         size_t line, column;
-        int64_t intValue;
-        std::string stringValue;
 
-        Token() : kind(TokenKind::Unknown), lexeme(""), line(0), column(0), intValue(0) {}
+        Token() : kind(TokenKind::Unknown), lexeme(""), line(0), column(0) {}
 
         Token(TokenKind kind, const std::string &lexeme, size_t line, size_t column)
-            : kind(kind), lexeme(lexeme), line(line), column(column), intValue(0) {}
+            : kind(kind), lexeme(lexeme), line(line), column(column){}
     };
 
     class Lexer

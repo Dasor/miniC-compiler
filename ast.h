@@ -131,13 +131,7 @@ namespace miniC
     class ASTVisitor
     {
 
-    protected:
-        static std::unique_ptr<llvm::LLVMContext> context;
-        static std::unique_ptr<llvm::Module> module;
-        static std::unique_ptr<llvm::IRBuilder<>> builder;
-        static std::map<std::string, llvm::Value *> namedValues;
-        // Maps miniC types to their corresponding LLVM type constructors
-        static const std::map<miniC::Type, llvm::Type *> typeMap;
+
 
     public:
         virtual ~ASTVisitor() = default;
@@ -147,6 +141,29 @@ namespace miniC
         virtual llvm::Value *visit(CallExpr &expr) = 0;
         virtual llvm::Function *visit(Prototype &proto) = 0;
         virtual llvm::Function *visit(miniC::Function &func) = 0;
+    };
+
+    class IRGenerator : public ASTVisitor
+    {
+
+    protected:
+        static std::unique_ptr<llvm::LLVMContext> context;
+        static std::unique_ptr<llvm::Module> module;
+        static std::unique_ptr<llvm::IRBuilder<>> builder;
+        static std::map<std::string, llvm::Value *> namedValues;
+        // Maps miniC types to their corresponding LLVM type constructors
+        static const std::map<miniC::Type, llvm::Type *> typeMap;
+
+    public:
+        llvm::Value *visit(BinaryExpr &expr) override;
+        llvm::Value *visit(LiteralExpr &expr) override;
+        llvm::Value *visit(VarExpr &expr) override;
+        llvm::Value *visit(CallExpr &expr) override;
+        llvm::Function *visit(Prototype &proto) override;
+        llvm::Function *visit(miniC::Function &func) override;
+
+        // Additional methods for IR generation
+        void generateIR(const std::vector<std::unique_ptr<ASTNode>> &astNodes);
     };
 
 } // namespace miniC

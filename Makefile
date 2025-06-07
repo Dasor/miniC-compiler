@@ -1,6 +1,6 @@
 # Compiler and flags
 CXX := g++
-CXXFLAGS := -std=c++17 -Wall -Wextra -g -lLLVM
+CXXFLAGS := -std=c++17 -Wall -Wno-switch -Wextra -g -lLLVM
 
 # Output binary name
 TARGET := comp

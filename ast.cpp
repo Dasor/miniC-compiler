@@ -4,16 +4,16 @@ using namespace miniC;
 using namespace llvm;
 
 // Initialize static members
-std::unique_ptr<llvm::LLVMContext> ASTVisitor::context = std::make_unique<llvm::LLVMContext>();
-std::unique_ptr<llvm::Module> ASTVisitor::module = std::make_unique<llvm::Module>("miniC", *ASTVisitor::context);
-std::unique_ptr<llvm::IRBuilder<>> ASTVisitor::builder = std::make_unique<llvm::IRBuilder<>>(*ASTVisitor::context);
-std::map<std::string, llvm::Value *> ASTVisitor::namedValues;
-const std::map<miniC::Type, llvm::Type *> ASTVisitor::typeMap = {
-    {miniC::Type::Int, llvm::Type::getInt32Ty(*ASTVisitor::context)},
-    {miniC::Type::Float, llvm::Type::getFloatTy(*ASTVisitor::context)},
-    {miniC::Type::Char, llvm::Type::getInt8Ty(*ASTVisitor::context)},
-    {miniC::Type::String, llvm::ArrayType::get(llvm::Type::getInt8Ty(*ASTVisitor::context), 0)},
-    {miniC::Type::Void, llvm::Type::getVoidTy(*ASTVisitor::context)},
+std::unique_ptr<llvm::LLVMContext> IRGenerator::context = std::make_unique<llvm::LLVMContext>();
+std::unique_ptr<llvm::Module> IRGenerator::module = std::make_unique<llvm::Module>("miniC", *IRGenerator::context);
+std::unique_ptr<llvm::IRBuilder<>> IRGenerator::builder = std::make_unique<llvm::IRBuilder<>>(*IRGenerator::context);
+std::map<std::string, llvm::Value *> IRGenerator::namedValues;
+const std::map<miniC::Type, llvm::Type *> IRGenerator::typeMap = {
+    {miniC::Type::Int, llvm::Type::getInt32Ty(*IRGenerator::context)},
+    {miniC::Type::Float, llvm::Type::getFloatTy(*IRGenerator::context)},
+    {miniC::Type::Char, llvm::Type::getInt8Ty(*IRGenerator::context)},
+    {miniC::Type::String, llvm::ArrayType::get(llvm::Type::getInt8Ty(*IRGenerator::context), 0)},
+    {miniC::Type::Void, llvm::Type::getVoidTy(*IRGenerator::context)},
     {miniC::Type::Unknown, nullptr}};
 // Accept method implementations for AST nodes
 
@@ -49,7 +49,7 @@ llvm::Function *Prototype::accept(ASTVisitor &visitor)
 
 // Visitor method implementations
 
-Value *ASTVisitor::visit(LiteralExpr &expr)
+Value *IRGenerator::visit(LiteralExpr &expr)
 {
     switch (expr.type)
     {
@@ -71,7 +71,7 @@ Value *ASTVisitor::visit(LiteralExpr &expr)
     }
 }
 
-Value *ASTVisitor::visit(VarExpr &expr)
+Value *IRGenerator::visit(VarExpr &expr)
 {
     Value *V = namedValues[expr.name];
     if (!V)
@@ -82,7 +82,7 @@ Value *ASTVisitor::visit(VarExpr &expr)
     return V;
 }
 
-Value *ASTVisitor::visit(BinaryExpr &expr)
+Value *IRGenerator::visit(BinaryExpr &expr)
 {
     Value *LHS = expr.lhs->accept(*this);
     Value *RHS = expr.rhs->accept(*this);
@@ -167,7 +167,7 @@ Value *ASTVisitor::visit(BinaryExpr &expr)
     }
 }
 
-Value *ASTVisitor::visit(CallExpr &expr)
+Value *IRGenerator::visit(CallExpr &expr)
 {
     // Get function from module
     llvm::Function *calleeF = module->getFunction(expr.callee);
@@ -217,7 +217,7 @@ Value *ASTVisitor::visit(CallExpr &expr)
     return builder->CreateCall(calleeF, argsV, "calltmp");
 }
 
-llvm::Function *ASTVisitor::visit(Function &func)
+llvm::Function *IRGenerator::visit(Function &func)
 {
     // Create function from prototype
     llvm::Function *F = func.proto->accept(*this);
@@ -234,6 +234,23 @@ llvm::Function *ASTVisitor::visit(Function &func)
         namedValues[std::string(Arg.getName())] = &Arg;
     }
 
+    // Check if the function has a body
+    if (!func.body)
+    {
+        // If no body, return void for void functions
+        if (func.proto->returnType == Type::Void)
+        {
+            builder->CreateRetVoid();
+            return F;
+        }
+        else
+        {
+            // Error: non-void function without body
+            F->eraseFromParent();
+            return nullptr;
+        }
+    }
+
     // Generate function body
     if (Value *RetVal = func.body->accept(*this))
     {
@@ -241,7 +258,7 @@ llvm::Function *ASTVisitor::visit(Function &func)
         builder->CreateRet(RetVal);
 
         // Verify function
-        if (verifyFunction(*F))
+        if (verifyFunction(*F, &llvm::errs()))
         {
             F->eraseFromParent();
             return nullptr;
@@ -254,7 +271,7 @@ llvm::Function *ASTVisitor::visit(Function &func)
     return nullptr;
 }
 
-llvm::Function *ASTVisitor::visit(Prototype &proto)
+llvm::Function *IRGenerator::visit(Prototype &proto)
 {
     // Default implementation does nothing
     std::vector<llvm::Type *> argTypes;
