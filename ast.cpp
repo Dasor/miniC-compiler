@@ -32,7 +32,7 @@ Value *VarExpr::accept(ASTVisitor &visitor)
     return visitor.visit(*this);
 }
 
-Value *DefExpr::accept(ASTVisitor &visitor)
+Value *DefStmt::accept(ASTVisitor &visitor)
 {
     return visitor.visit(*this);
 }
@@ -52,6 +52,15 @@ llvm::Function *Prototype::accept(ASTVisitor &visitor)
     return visitor.visit(*this);
 }
 
+Value *BlockStmt::accept(ASTVisitor &visitor)
+{
+    return visitor.visit(*this);
+}
+
+Value *ExprStmt::accept(ASTVisitor &visitor)
+{
+    return visitor.visit(*this);
+}
 // Visitor method implementations
 
 Value *IRGenerator::visit(LiteralExpr &expr)
@@ -87,10 +96,10 @@ Value *IRGenerator::visit(VarExpr &expr)
     return V;
 }
 
-Value *IRGenerator::visit(DefExpr &expr)
+Value *IRGenerator::visit(DefStmt &expr)
 {
     // Create variable in the symbol table
-    llvm::Type *varType = typeMap.at(expr.getType());
+    llvm::Type *varType = typeMap.at(expr.type);
     if (!varType)
     {
         return nullptr; // Handle unknown type
@@ -197,6 +206,21 @@ Value *IRGenerator::visit(BinaryExpr &expr)
     default:
         return nullptr;
     }
+}
+
+Value *IRGenerator::visit(BlockStmt &stmt) {
+    Value *lastValue = nullptr;
+    for (auto &stmtPtr : stmt.statements) {
+        lastValue = stmtPtr->accept(*this);
+        if (!lastValue) {
+            return nullptr; // Statement failed
+        }
+    }
+    return lastValue; // Return value of last statement
+}
+
+Value *IRGenerator::visit(ExprStmt &stmt) {
+    return stmt.expr->accept(*this); // Just evaluate the expression
 }
 
 Value *IRGenerator::visit(CallExpr &expr)
@@ -356,9 +380,6 @@ bool VarExpr::typeCheck()
     return true;*/
 }
 
-bool DefExpr::typeCheck(){
-    return true;
-}
 
 bool LiteralExpr::typeCheck()
 {

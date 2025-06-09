@@ -108,7 +108,7 @@ std::unique_ptr<Expr> Parser::parseIdentifierExpr()
     return std::make_unique<VarExpr>(name);
 }
 
-std::unique_ptr<Expr> Parser::parseDefinition(){
+std::unique_ptr<Stmt> Parser::parseDefinition(){
     auto type = currentToken.kind;
     nextToken(); // Eat the type keyword
     if(!match(TokenKind::Identifier))
@@ -130,7 +130,7 @@ std::unique_ptr<Expr> Parser::parseDefinition(){
         EXPECT_SEMICOLON();
     }
     VarExpr var(name);
-    return std::make_unique<DefExpr>(var, std::move(initValue));
+    return std::make_unique<DefStmt>(var, std::move(initValue));
 }
 
 std::unique_ptr<Expr> Parser::parseLiteralExpr()
@@ -161,20 +161,44 @@ std::unique_ptr<Expr> Parser::parseExpression()
 
     auto lhs = parsePrimary();
     auto expr = parseBinOpRHS(0, std::move(lhs));
-    EXPECT_SEMICOLON();
     return expr;
 }
 
-std::unique_ptr<Expr> Parser::parseExpressionOrDefinition()
-{
-    if (currentToken.kind >= TokenKind::Kw_Int && currentToken.kind <= TokenKind::Kw_Void)
-    {
+std::unique_ptr<Stmt> Parser::parseStatement() {
+    if (currentToken.kind >= TokenKind::Kw_Int && currentToken.kind <= TokenKind::Kw_Void) {
         return parseDefinition();
+    } else {
+        auto expr = parseExpression();
+        EXPECT_SEMICOLON();
+        return std::make_unique<ExprStmt>(std::move(expr));
     }
-    else
-    {
-        return parseExpression();
+}
+
+std::unique_ptr<BlockStmt> Parser::parseBlock() {
+    if (!expect(TokenKind::LBrace)) {
+        return nullptr;
     }
+
+    auto block = std::make_unique<BlockStmt>();
+    while (!match(TokenKind::RBrace) && !match(TokenKind::EOF_TOK)) {
+        if (auto stmt = parseStatement()) {
+            block->addStatement(std::move(stmt));
+        } else {
+            // Error recovery - skip to next statement
+            while (!match(TokenKind::Semicolon) && 
+                   !match(TokenKind::RBrace) && 
+                   !match(TokenKind::EOF_TOK)) {
+                nextToken();
+            }
+            if (match(TokenKind::Semicolon)) nextToken();
+        }
+    }
+
+    if (!expect(TokenKind::RBrace)) {
+        throw std::runtime_error("Expected '}' at end of block");
+    }
+
+    return block;
 }
 
 std::unique_ptr<Expr> Parser::parseBinOpRHS(int precedence, std::unique_ptr<Expr> lhs)
@@ -286,30 +310,10 @@ std::unique_ptr<Function> Parser::parseFunction()
     }
 
     // Parse function body
-    if (!expect(TokenKind::LBrace))
+    auto body = parseBlock();
+    if (!body && proto->returnType != Type::Void)
     {
-        throw std::runtime_error("Expected '{' in function definition");
-    }
-
-    if (match(TokenKind::RBrace))
-    {
-        if (proto->returnType != Type::Void)
-        {
-            throw std::runtime_error("Function with non-void return type cannot have an empty body");
-        }
-        nextToken(); // Empty function body
-        return std::make_unique<Function>(std::move(proto), nullptr);
-    }
-
-    auto body = parseExpressionOrDefinition();
-    if (!body)
-    {
-        throw std::runtime_error("Expected function body");
-    }
-
-    if (!expect(TokenKind::RBrace))
-    {
-        throw std::runtime_error("Expected '}' in function definition");
+        throw std::runtime_error("Function with non-void return type cannot have an empty body");
     }
 
     return std::make_unique<Function>(std::move(proto), std::move(body));

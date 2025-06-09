@@ -33,12 +33,22 @@ namespace miniC
 
     // Forward declarations
     class ASTVisitor;
+    class Stmt;
+    class BlockStmt;
+    class ExprStmt;
+    class DefStmt;
 
     class ASTNode
     {
     public:
         virtual ~ASTNode() = default;
         virtual llvm::Value *accept(ASTVisitor &visitor) = 0;
+    };
+
+    class Stmt : public ASTNode {
+    public:
+        virtual ~Stmt() = default;
+        virtual llvm::Value* accept(ASTVisitor& visitor) = 0;
     };
 
     class Expr : public ASTNode
@@ -91,17 +101,38 @@ namespace miniC
         bool typeCheck() override;
     };
 
-    class DefExpr : public Expr
-    {
+
+    class BlockStmt : public Stmt {
     public:
+        std::vector<std::unique_ptr<Stmt>> statements;
+        
+        void addStatement(std::unique_ptr<Stmt> stmt) {
+            statements.push_back(std::move(stmt));
+        }
+        
+        llvm::Value* accept(ASTVisitor& visitor) override;
+    };
+
+    class ExprStmt : public Stmt {
+    public:
+        std::unique_ptr<Expr> expr;
+        
+        explicit ExprStmt(std::unique_ptr<Expr> expr) 
+            : expr(std::move(expr)) {}
+            
+        llvm::Value* accept(ASTVisitor& visitor) override;
+    };
+
+    class DefStmt : public Stmt {
+    public:
+        miniC::Type type = Type::Unknown; // Default type
         VarExpr var;
         std::unique_ptr<Expr> initValue;
-
-        DefExpr(VarExpr var, std::unique_ptr<Expr> initValue)
-            : var(var), initValue(std::move(initValue)) {}
-
-        llvm::Value *accept(ASTVisitor &visitor) override;
-        bool typeCheck() override;
+        
+        DefStmt(VarExpr var, std::unique_ptr<Expr> initValue)
+            : var(std::move(var)), initValue(std::move(initValue)) {}
+            
+        llvm::Value* accept(ASTVisitor& visitor) override;
     };
 
     class CallExpr : public Expr
@@ -133,9 +164,9 @@ namespace miniC
     {
     public:
         std::unique_ptr<Prototype> proto;
-        std::unique_ptr<Expr> body;
+        std::unique_ptr<BlockStmt> body;
 
-        Function(std::unique_ptr<Prototype> proto, std::unique_ptr<Expr> body)
+        Function(std::unique_ptr<Prototype> proto, std::unique_ptr<BlockStmt> body)
             : proto(std::move(proto)), body(std::move(body)) {}
 
         llvm::Function *accept(ASTVisitor &visitor) override;
@@ -151,10 +182,12 @@ namespace miniC
         virtual llvm::Value *visit(BinaryExpr &expr) = 0;
         virtual llvm::Value *visit(LiteralExpr &expr) = 0;
         virtual llvm::Value *visit(VarExpr &expr) = 0;
-        virtual llvm::Value *visit(DefExpr &expr) = 0;
         virtual llvm::Value *visit(CallExpr &expr) = 0;
         virtual llvm::Function *visit(Prototype &proto) = 0;
         virtual llvm::Function *visit(miniC::Function &func) = 0;
+        virtual llvm::Value *visit(BlockStmt &stmt) = 0;
+        virtual llvm::Value *visit(ExprStmt &stmt) = 0;
+        virtual llvm::Value *visit(DefStmt &stmt) = 0;
     };
 
     class IRGenerator : public ASTVisitor
@@ -172,10 +205,12 @@ namespace miniC
         llvm::Value *visit(BinaryExpr &expr) override;
         llvm::Value *visit(LiteralExpr &expr) override;
         llvm::Value *visit(VarExpr &expr) override;
-        llvm::Value *visit(DefExpr &expr) override;
         llvm::Value *visit(CallExpr &expr) override;
         llvm::Function *visit(Prototype &proto) override;
         llvm::Function *visit(miniC::Function &func) override;
+        llvm::Value *visit(BlockStmt &stmt) override;
+        llvm::Value *visit(ExprStmt &stmt) override;
+        llvm::Value *visit(DefStmt &stmt) override;
 
         // Additional methods for IR generation
         void generateIR(const std::vector<std::unique_ptr<ASTNode>> &astNodes);
