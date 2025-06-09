@@ -29,9 +29,11 @@ private:
     // Expression parsing
     std::unique_ptr<Expr> parsePrimary();
     std::unique_ptr<Expr> parseIdentifierExpr();
+    std::unique_ptr<Expr> parseDefinition();
     std::unique_ptr<Expr> parseLiteralExpr();
     std::unique_ptr<Expr> parseParenExpr();
     std::unique_ptr<Expr> parseBinOpRHS(int precedence, std::unique_ptr<Expr> lhs);
+    std::unique_ptr<Expr> parseExpressionOrDefinition();
 
     // Precedence table
     int getTokenPrecedence(TokenKind op);

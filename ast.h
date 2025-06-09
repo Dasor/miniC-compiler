@@ -91,6 +91,19 @@ namespace miniC
         bool typeCheck() override;
     };
 
+    class DefExpr : public Expr
+    {
+    public:
+        VarExpr var;
+        std::unique_ptr<Expr> initValue;
+
+        DefExpr(VarExpr var, std::unique_ptr<Expr> initValue)
+            : var(var), initValue(std::move(initValue)) {}
+
+        llvm::Value *accept(ASTVisitor &visitor) override;
+        bool typeCheck() override;
+    };
+
     class CallExpr : public Expr
     {
     public:
@@ -138,6 +151,7 @@ namespace miniC
         virtual llvm::Value *visit(BinaryExpr &expr) = 0;
         virtual llvm::Value *visit(LiteralExpr &expr) = 0;
         virtual llvm::Value *visit(VarExpr &expr) = 0;
+        virtual llvm::Value *visit(DefExpr &expr) = 0;
         virtual llvm::Value *visit(CallExpr &expr) = 0;
         virtual llvm::Function *visit(Prototype &proto) = 0;
         virtual llvm::Function *visit(miniC::Function &func) = 0;
@@ -158,6 +172,7 @@ namespace miniC
         llvm::Value *visit(BinaryExpr &expr) override;
         llvm::Value *visit(LiteralExpr &expr) override;
         llvm::Value *visit(VarExpr &expr) override;
+        llvm::Value *visit(DefExpr &expr) override;
         llvm::Value *visit(CallExpr &expr) override;
         llvm::Function *visit(Prototype &proto) override;
         llvm::Function *visit(miniC::Function &func) override;

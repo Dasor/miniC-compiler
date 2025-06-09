@@ -108,6 +108,31 @@ std::unique_ptr<Expr> Parser::parseIdentifierExpr()
     return std::make_unique<VarExpr>(name);
 }
 
+std::unique_ptr<Expr> Parser::parseDefinition(){
+    auto type = currentToken.kind;
+    nextToken(); // Eat the type keyword
+    if(!match(TokenKind::Identifier))
+    {
+        throw std::runtime_error("Expected variable name after type keyword");
+    }
+    std::string name = currentToken.lexeme;
+    nextToken(); // Eat the variable name
+    std::unique_ptr<Expr> initValue = nullptr;
+    if (match(TokenKind::Assign))
+    {
+        nextToken(); // Eat '='
+        initValue = parseExpression();
+        if (!initValue)
+        {
+            throw std::runtime_error("Expected expression after '='");
+        }
+    }else{
+        EXPECT_SEMICOLON();
+    }
+    VarExpr var(name);
+    return std::make_unique<DefExpr>(var, std::move(initValue));
+}
+
 std::unique_ptr<Expr> Parser::parseLiteralExpr()
 {
     auto type = currentToken.kind;
@@ -138,6 +163,18 @@ std::unique_ptr<Expr> Parser::parseExpression()
     auto expr = parseBinOpRHS(0, std::move(lhs));
     EXPECT_SEMICOLON();
     return expr;
+}
+
+std::unique_ptr<Expr> Parser::parseExpressionOrDefinition()
+{
+    if (currentToken.kind >= TokenKind::Kw_Int && currentToken.kind <= TokenKind::Kw_Void)
+    {
+        return parseDefinition();
+    }
+    else
+    {
+        return parseExpression();
+    }
 }
 
 std::unique_ptr<Expr> Parser::parseBinOpRHS(int precedence, std::unique_ptr<Expr> lhs)
@@ -264,7 +301,7 @@ std::unique_ptr<Function> Parser::parseFunction()
         return std::make_unique<Function>(std::move(proto), nullptr);
     }
 
-    auto body = parseExpression();
+    auto body = parseExpressionOrDefinition();
     if (!body)
     {
         throw std::runtime_error("Expected function body");

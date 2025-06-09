@@ -32,6 +32,11 @@ Value *VarExpr::accept(ASTVisitor &visitor)
     return visitor.visit(*this);
 }
 
+Value *DefExpr::accept(ASTVisitor &visitor)
+{
+    return visitor.visit(*this);
+}
+
 Value *CallExpr::accept(ASTVisitor &visitor)
 {
     return visitor.visit(*this);
@@ -80,6 +85,33 @@ Value *IRGenerator::visit(VarExpr &expr)
         return nullptr;
     }
     return V;
+}
+
+Value *IRGenerator::visit(DefExpr &expr)
+{
+    // Create variable in the symbol table
+    llvm::Type *varType = typeMap.at(expr.getType());
+    if (!varType)
+    {
+        return nullptr; // Handle unknown type
+    }
+
+    // Create alloca for the variable
+    AllocaInst *alloca = builder->CreateAlloca(varType, nullptr, expr.var.name);
+    namedValues[expr.var.name] = alloca;
+
+    // Initialize variable if it has a value
+    if (expr.initValue)
+    {
+        Value *initValue = expr.initValue->accept(*this);
+        if (!initValue)
+        {
+            return nullptr; // Initialization failed
+        }
+        builder->CreateStore(initValue, alloca);
+    }
+
+    return alloca;
 }
 
 Value *IRGenerator::visit(BinaryExpr &expr)
@@ -322,6 +354,10 @@ bool VarExpr::typeCheck()
     // Set the type based on the variable's definition
     type = namedValues[name]->getType();
     return true;*/
+}
+
+bool DefExpr::typeCheck(){
+    return true;
 }
 
 bool LiteralExpr::typeCheck()
