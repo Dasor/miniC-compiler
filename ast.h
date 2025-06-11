@@ -57,6 +57,9 @@ namespace miniC
         virtual ~Expr() = default;
         miniC::Type type = Type::Unknown;
 
+        Expr() = default;
+        Expr(Type type) : type(type) {}
+
         virtual miniC::Type getType() const { return type; }
         virtual void setType(Type t) { type = t; }
         virtual bool typeCheck() = 0;
@@ -95,7 +98,10 @@ namespace miniC
     public:
         std::string name;
 
+        // For reading a var
         explicit VarExpr(const std::string &name) : name(name) {}
+        // For defining a var
+        explicit VarExpr(const std::string &name, Type type) : Expr(type), name(name) {}
 
         llvm::Value *accept(ASTVisitor &visitor) override;
         bool typeCheck() override;
@@ -125,7 +131,6 @@ namespace miniC
 
     class DefStmt : public Stmt {
     public:
-        miniC::Type type = Type::Unknown; // Default type
         VarExpr var;
         std::unique_ptr<Expr> initValue;
         

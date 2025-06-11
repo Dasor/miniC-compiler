@@ -1,6 +1,7 @@
 // parser.cpp - Recursive descent parser implementation
 #include "parser.h"
 #include "ast.h"
+#include <map>
 #include <stdexcept>
 
 // define macro for expect semicolon
@@ -13,6 +14,14 @@ using namespace miniC;
 
 // define IRGenerator visitor
 IRGenerator visitor;
+
+
+static std::map<TokenKind, Type> tokenToType = {
+    {TokenKind::Kw_Int, Type::Int},
+    {TokenKind::Kw_Float, Type::Float},
+    {TokenKind::Kw_Char, Type::Char},
+    {TokenKind::Kw_Void, Type::Void}
+};
 
 void Parser::nextToken()
 {
@@ -129,7 +138,7 @@ std::unique_ptr<Stmt> Parser::parseDefinition(){
     }else{
         EXPECT_SEMICOLON();
     }
-    VarExpr var(name);
+    VarExpr var(name, tokenToType[type]);
     return std::make_unique<DefStmt>(var, std::move(initValue));
 }
 
@@ -161,6 +170,7 @@ std::unique_ptr<Expr> Parser::parseExpression()
 
     auto lhs = parsePrimary();
     auto expr = parseBinOpRHS(0, std::move(lhs));
+    EXPECT_SEMICOLON();
     return expr;
 }
 
@@ -169,7 +179,6 @@ std::unique_ptr<Stmt> Parser::parseStatement() {
         return parseDefinition();
     } else {
         auto expr = parseExpression();
-        EXPECT_SEMICOLON();
         return std::make_unique<ExprStmt>(std::move(expr));
     }
 }
@@ -315,6 +324,9 @@ std::unique_ptr<Function> Parser::parseFunction()
     {
         throw std::runtime_error("Function with non-void return type cannot have an empty body");
     }
+
+    // Verify function and print possible errors
+
 
     return std::make_unique<Function>(std::move(proto), std::move(body));
 }

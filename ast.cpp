@@ -96,23 +96,23 @@ Value *IRGenerator::visit(VarExpr &expr)
     return V;
 }
 
-Value *IRGenerator::visit(DefStmt &expr)
+Value *IRGenerator::visit(DefStmt &stmt)
 {
     // Create variable in the symbol table
-    llvm::Type *varType = typeMap.at(expr.type);
+    llvm::Type *varType = typeMap.at(stmt.var.getType());
     if (!varType)
     {
         return nullptr; // Handle unknown type
     }
 
     // Create alloca for the variable
-    AllocaInst *alloca = builder->CreateAlloca(varType, nullptr, expr.var.name);
-    namedValues[expr.var.name] = alloca;
+    AllocaInst *alloca = builder->CreateAlloca(varType, nullptr, stmt.var.name);
+    namedValues[stmt.var.name] = alloca;
 
     // Initialize variable if it has a value
-    if (expr.initValue)
+    if (stmt.initValue)
     {
-        Value *initValue = expr.initValue->accept(*this);
+        Value *initValue = stmt.initValue->accept(*this);
         if (!initValue)
         {
             return nullptr; // Initialization failed
@@ -208,18 +208,22 @@ Value *IRGenerator::visit(BinaryExpr &expr)
     }
 }
 
-Value *IRGenerator::visit(BlockStmt &stmt) {
+Value *IRGenerator::visit(BlockStmt &stmt)
+{
     Value *lastValue = nullptr;
-    for (auto &stmtPtr : stmt.statements) {
+    for (auto &stmtPtr : stmt.statements)
+    {
         lastValue = stmtPtr->accept(*this);
-        if (!lastValue) {
+        if (!lastValue)
+        {
             return nullptr; // Statement failed
         }
     }
     return lastValue; // Return value of last statement
 }
 
-Value *IRGenerator::visit(ExprStmt &stmt) {
+Value *IRGenerator::visit(ExprStmt &stmt)
+{
     return stmt.expr->accept(*this); // Just evaluate the expression
 }
 
@@ -311,7 +315,14 @@ llvm::Function *IRGenerator::visit(Function &func)
     if (Value *RetVal = func.body->accept(*this))
     {
         // Create return
-        builder->CreateRet(RetVal);
+        if (func.proto->returnType == Type::Void)
+        {
+            builder->CreateRetVoid();
+        }
+        else
+        {
+            builder->CreateRet(RetVal);
+        }
 
         // Verify function
         if (verifyFunction(*F, &llvm::errs()))
@@ -379,7 +390,6 @@ bool VarExpr::typeCheck()
     type = namedValues[name]->getType();
     return true;*/
 }
-
 
 bool LiteralExpr::typeCheck()
 {
