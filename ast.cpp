@@ -137,6 +137,17 @@ Value *IRGenerator::visit(BinaryExpr &expr)
     Type lhsType = expr.lhs->getType();
     Type rhsType = expr.rhs->getType();
 
+    // If its a pointer load the value
+    if (auto *allocaLHS = dyn_cast<AllocaInst>(LHS))
+    {
+        LHS = builder->CreateLoad(allocaLHS->getAllocatedType(), allocaLHS, "loadlhs");
+    }
+    if (auto *allocaRHS = dyn_cast<AllocaInst>(RHS))
+    {
+        RHS = builder->CreateLoad(allocaRHS->getAllocatedType(), allocaRHS, "loadrhs");
+    }
+
+
     // Type checking and conversion
     if (lhsType != rhsType)
     {
