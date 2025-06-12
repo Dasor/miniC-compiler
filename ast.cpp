@@ -332,6 +332,11 @@ llvm::Function *IRGenerator::visit(Function &func)
         }
         else
         {
+            // if it's a pointer use the load instruction and return the value
+            if (auto *allocaRetVal = dyn_cast<AllocaInst>(RetVal))
+            {
+                RetVal = builder->CreateLoad(allocaRetVal->getAllocatedType(), allocaRetVal, "loadret");
+            }
             builder->CreateRet(RetVal);
         }
 

@@ -5,8 +5,9 @@
 #include <stdexcept>
 
 // define macro for expect semicolon
-#define EXPECT_SEMICOLON() \
-    if (!expect(TokenKind::Semicolon)) { \
+#define EXPECT_SEMICOLON()                                         \
+    if (!expect(TokenKind::Semicolon))                             \
+    {                                                              \
         throw std::runtime_error("Expected ';' after expression"); \
     }
 
@@ -15,13 +16,11 @@ using namespace miniC;
 // define IRGenerator visitor
 IRGenerator visitor;
 
-
 static std::map<TokenKind, Type> tokenToType = {
     {TokenKind::Kw_Int, Type::Int},
     {TokenKind::Kw_Float, Type::Float},
     {TokenKind::Kw_Char, Type::Char},
-    {TokenKind::Kw_Void, Type::Void}
-};
+    {TokenKind::Kw_Void, Type::Void}};
 
 void Parser::nextToken()
 {
@@ -117,10 +116,11 @@ std::unique_ptr<Expr> Parser::parseIdentifierExpr()
     return std::make_unique<VarExpr>(name);
 }
 
-std::unique_ptr<Stmt> Parser::parseDefinition(){
+std::unique_ptr<Stmt> Parser::parseDefinition()
+{
     auto type = currentToken.kind;
     nextToken(); // Eat the type keyword
-    if(!match(TokenKind::Identifier))
+    if (!match(TokenKind::Identifier))
     {
         throw std::runtime_error("Expected variable name after type keyword");
     }
@@ -135,7 +135,9 @@ std::unique_ptr<Stmt> Parser::parseDefinition(){
         {
             throw std::runtime_error("Expected expression after '='");
         }
-    }else{
+    }
+    else
+    {
         EXPECT_SEMICOLON();
     }
     VarExpr var(name, tokenToType[type]);
@@ -158,7 +160,6 @@ std::unique_ptr<Expr> Parser::parseParenExpr()
     {
         throw std::runtime_error("Expected ')'");
     }
-    EXPECT_SEMICOLON();
     return expr;
 }
 
@@ -170,40 +171,55 @@ std::unique_ptr<Expr> Parser::parseExpression()
 
     auto lhs = parsePrimary();
     auto expr = parseBinOpRHS(0, std::move(lhs));
-    EXPECT_SEMICOLON();
     return expr;
 }
 
-std::unique_ptr<Stmt> Parser::parseStatement() {
-    if (currentToken.kind >= TokenKind::Kw_Int && currentToken.kind <= TokenKind::Kw_Void) {
-        return parseDefinition();
-    } else {
+std::unique_ptr<Stmt> Parser::parseStatement()
+{
+    if (currentToken.kind >= TokenKind::Kw_Int && currentToken.kind <= TokenKind::Kw_Void)
+    {
+        auto def = parseDefinition();
+        EXPECT_SEMICOLON();
+        return def;
+    }
+    else
+    {
         auto expr = parseExpression();
+        EXPECT_SEMICOLON();
         return std::make_unique<ExprStmt>(std::move(expr));
     }
 }
 
-std::unique_ptr<BlockStmt> Parser::parseBlock() {
-    if (!expect(TokenKind::LBrace)) {
+std::unique_ptr<BlockStmt> Parser::parseBlock()
+{
+    if (!expect(TokenKind::LBrace))
+    {
         return nullptr;
     }
 
     auto block = std::make_unique<BlockStmt>();
-    while (!match(TokenKind::RBrace) && !match(TokenKind::EOF_TOK)) {
-        if (auto stmt = parseStatement()) {
+    while (!match(TokenKind::RBrace) && !match(TokenKind::EOF_TOK))
+    {
+        if (auto stmt = parseStatement())
+        {
             block->addStatement(std::move(stmt));
-        } else {
+        }
+        else
+        {
             // Error recovery - skip to next statement
-            while (!match(TokenKind::Semicolon) && 
-                   !match(TokenKind::RBrace) && 
-                   !match(TokenKind::EOF_TOK)) {
+            while (!match(TokenKind::Semicolon) &&
+                   !match(TokenKind::RBrace) &&
+                   !match(TokenKind::EOF_TOK))
+            {
                 nextToken();
             }
-            if (match(TokenKind::Semicolon)) nextToken();
+            if (match(TokenKind::Semicolon))
+                nextToken();
         }
     }
 
-    if (!expect(TokenKind::RBrace)) {
+    if (!expect(TokenKind::RBrace))
+    {
         throw std::runtime_error("Expected '}' at end of block");
     }
 
@@ -327,7 +343,6 @@ std::unique_ptr<Function> Parser::parseFunction()
 
     // Verify function and print possible errors
 
-
     return std::make_unique<Function>(std::move(proto), std::move(body));
 }
 
@@ -347,7 +362,7 @@ void Parser::MainLoop()
                 if (auto FnIR = FnAST->accept(visitor))
                 {
                     // Handle the generated IR for the function
-                    fprintf(stderr, "Generated IR for function: %s\n", FnAST->proto->name.c_str());
+                    // fprintf(stderr, "Generated IR for function: %s\n", FnAST->proto->name.c_str());
                     FnIR->print(llvm::errs());
                     fprintf(stderr, "\n");
                 }
