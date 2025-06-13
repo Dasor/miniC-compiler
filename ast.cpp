@@ -134,11 +134,10 @@ Value *IRGenerator::visit(BinaryExpr &expr)
     }
 
     // Get types of operands
-
     llvm::Type *lhsType = LHS->getType();
     llvm::Type *rhsType = RHS->getType();
 
-    // If its a pointer load the value
+    // If it's a pointer, load the value
     if (auto *allocaLHS = dyn_cast<AllocaInst>(LHS))
     {
         LHS = builder->CreateLoad(allocaLHS->getAllocatedType(), allocaLHS, "loadlhs");
@@ -150,7 +149,6 @@ Value *IRGenerator::visit(BinaryExpr &expr)
         rhsType = RHS->getType(); // Update type after load
     }
 
-
     // Type checking and conversion
     if (lhsType != rhsType)
     {
@@ -160,12 +158,13 @@ Value *IRGenerator::visit(BinaryExpr &expr)
             if (!lhsType->isFloatTy())
             {
                 LHS = builder->CreateSIToFP(LHS, llvm::Type::getFloatTy(*context), "convfloat");
+                lhsType = llvm::Type::getFloatTy(*context);
             }
             if (!rhsType->isFloatTy())
             {
                 RHS = builder->CreateSIToFP(RHS, llvm::Type::getFloatTy(*context), "convfloat");
+                rhsType = llvm::Type::getFloatTy(*context);
             }
-            //expr.setType(Type::Float);
         }
         else
         {
@@ -173,53 +172,42 @@ Value *IRGenerator::visit(BinaryExpr &expr)
             return nullptr;
         }
     }
-    /*else
-    {
-        expr.setType(lhsType);
-    }*/
 
     // Generate IR based on operation and types
-    switch (expr.op)
+    if (lhsType->isFloatTy())
     {
-    case TokenKind::Plus:
-        if (expr.getType() == Type::Float)
+        switch (expr.op)
         {
+        case TokenKind::Plus:
             return builder->CreateFAdd(LHS, RHS, "faddtmp");
-        }
-        else
-        {
-            return builder->CreateAdd(LHS, RHS, "addtmp");
-        }
-    case TokenKind::Minus:
-        if (expr.getType() == Type::Float)
-        {
+        case TokenKind::Minus:
             return builder->CreateFSub(LHS, RHS, "fsubtmp");
-        }
-        else
-        {
-            return builder->CreateSub(LHS, RHS, "subtmp");
-        }
-    case TokenKind::Star:
-        if (expr.getType() == Type::Float)
-        {
+        case TokenKind::Star:
             return builder->CreateFMul(LHS, RHS, "fmultmp");
-        }
-        else
-        {
-            return builder->CreateMul(LHS, RHS, "multmp");
-        }
-    case TokenKind::Slash:
-        if (expr.getType() == Type::Float)
-        {
+        case TokenKind::Slash:
             return builder->CreateFDiv(LHS, RHS, "fdivtmp");
+        default:
+            return nullptr;
         }
-        else
-        {
-            return builder->CreateSDiv(LHS, RHS, "divtmp");
-        }
-    default:
-        return nullptr;
     }
+    else if (lhsType->isIntegerTy())
+    {
+        switch (expr.op)
+        {
+        case TokenKind::Plus:
+            return builder->CreateAdd(LHS, RHS, "addtmp");
+        case TokenKind::Minus:
+            return builder->CreateSub(LHS, RHS, "subtmp");
+        case TokenKind::Star:
+            return builder->CreateMul(LHS, RHS, "multmp");
+        case TokenKind::Slash:
+            return builder->CreateSDiv(LHS, RHS, "divtmp");
+        default:
+            return nullptr;
+        }
+    }
+
+    return nullptr;
 }
 
 Value *IRGenerator::visit(BlockStmt &stmt)
@@ -267,6 +255,13 @@ Value *IRGenerator::visit(CallExpr &expr)
         // Get expected and actual types
         llvm::Type *expectedTy = calleeF->getFunctionType()->getParamType(i);
         llvm::Type *actualTy = argV->getType();
+
+        // load the value if it's an alloca
+        if (auto *allocaArg = dyn_cast<AllocaInst>(argV))
+        {
+            argV = builder->CreateLoad(allocaArg->getAllocatedType(), allocaArg, "loadarg");
+            actualTy = argV->getType(); // Update type after load
+        }
 
         // Handle type conversions
         if (actualTy != expectedTy)
@@ -329,17 +324,38 @@ llvm::Function *IRGenerator::visit(Function &func)
     if (Value *RetVal = func.body->accept(*this))
     {
         // Create return
-        if (func.proto->returnType == Type::Void)
+        // if it's a pointer use the load instruction and return the value
+        if (auto *allocaRetVal = dyn_cast<AllocaInst>(RetVal))
         {
-            builder->CreateRetVoid();
+            RetVal = builder->CreateLoad(allocaRetVal->getAllocatedType(), allocaRetVal, "loadret");
+        }
+        // Check for type mistmatch
+        if (typeMap.at(func.proto->returnType) != RetVal->getType())
+        {
+            if (func.proto->returnType == Type::Void)
+            {
+                builder->CreateRetVoid();
+            }
+            else if (typeMap.at(func.proto->returnType) == llvm::Type::getFloatTy(*context) && RetVal->getType()->isIntegerTy())
+            {
+                // Convert integer to float if needed
+                RetVal = builder->CreateSIToFP(RetVal, llvm::Type::getFloatTy(*context), "convfloat");
+                builder->CreateRet(RetVal);
+            }
+            else if (typeMap.at(func.proto->returnType) == llvm::Type::getInt32Ty(*context) && RetVal->getType()->isFloatingPointTy())
+            {
+                // Convert float to integer if needed
+                RetVal = builder->CreateFPToSI(RetVal, llvm::Type::getInt32Ty(*context), "convint");
+                builder->CreateRet(RetVal);
+            }
+            else
+            {
+                throw std::runtime_error("Return type mismatch in function " + func.proto->name);
+            }
         }
         else
         {
-            // if it's a pointer use the load instruction and return the value
-            if (auto *allocaRetVal = dyn_cast<AllocaInst>(RetVal))
-            {
-                RetVal = builder->CreateLoad(allocaRetVal->getAllocatedType(), allocaRetVal, "loadret");
-            }
+
             builder->CreateRet(RetVal);
         }
 
@@ -416,7 +432,8 @@ bool LiteralExpr::typeCheck()
     return true;
 }
 
-bool CallExpr::typeCheck() {
+bool CallExpr::typeCheck()
+{
     return true;
 }
 
