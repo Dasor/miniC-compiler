@@ -14,7 +14,7 @@
 using namespace miniC;
 
 // define IRGenerator visitor
-IRGenerator visitor;
+IRGenerator visitor = IRGenerator();
 
 static std::map<TokenKind, Type> tokenToType = {
     {TokenKind::Kw_Int, Type::Int},

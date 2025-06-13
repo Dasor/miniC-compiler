@@ -11,7 +11,7 @@ IRGenerator::IRGenerator()
 
     namedValues = {};
 
-    const std::map<miniC::Type, llvm::Type *> typeMap = {
+    typeMap = {
         {miniC::Type::Int, llvm::Type::getInt32Ty(*context)},
         {miniC::Type::Float, llvm::Type::getFloatTy(*context)},
         {miniC::Type::Char, llvm::Type::getInt8Ty(*context)},

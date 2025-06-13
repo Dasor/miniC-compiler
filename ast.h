@@ -217,7 +217,7 @@ namespace miniC
         std::unique_ptr<llvm::IRBuilder<>> builder;
         std::map<std::string, llvm::Value *> namedValues;
         // Maps miniC types to their corresponding LLVM type constructors
-        const std::map<miniC::Type, llvm::Type *> typeMap;
+        std::map<miniC::Type, llvm::Type *> typeMap;
         // for llvm opt
         // Create new pass and analysis managers.
         std::unique_ptr<llvm::FunctionPassManager> TheFPM;
