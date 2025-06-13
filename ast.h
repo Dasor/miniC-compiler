@@ -16,6 +16,17 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Type.h"
 #include "llvm/IR/Verifier.h"
+#include "llvm/Passes/PassBuilder.h"
+#include "llvm/Analysis/LoopAnalysisManager.h"
+#include "llvm/IR/PassManager.h"
+#include "llvm/Passes/StandardInstrumentations.h"
+#include "llvm/Support/TargetSelect.h"
+#include "llvm/Target/TargetMachine.h"
+#include "llvm/Transforms/InstCombine/InstCombine.h"
+#include "llvm/Transforms/Scalar.h"
+#include "llvm/Transforms/Scalar/GVN.h"
+#include "llvm/Transforms/Scalar/Reassociate.h"
+#include "llvm/Transforms/Scalar/SimplifyCFG.h"
 
 namespace miniC
 {
@@ -45,10 +56,11 @@ namespace miniC
         virtual llvm::Value *accept(ASTVisitor &visitor) = 0;
     };
 
-    class Stmt : public ASTNode {
+    class Stmt : public ASTNode
+    {
     public:
         virtual ~Stmt() = default;
-        virtual llvm::Value* accept(ASTVisitor& visitor) = 0;
+        virtual llvm::Value *accept(ASTVisitor &visitor) = 0;
     };
 
     class Expr : public ASTNode
@@ -77,7 +89,6 @@ namespace miniC
 
         llvm::Value *accept(ASTVisitor &visitor) override;
         bool typeCheck() override;
-        
     };
 
     class LiteralExpr : public Expr
@@ -107,37 +118,40 @@ namespace miniC
         bool typeCheck() override;
     };
 
-
-    class BlockStmt : public Stmt {
+    class BlockStmt : public Stmt
+    {
     public:
         std::vector<std::unique_ptr<Stmt>> statements;
-        
-        void addStatement(std::unique_ptr<Stmt> stmt) {
+
+        void addStatement(std::unique_ptr<Stmt> stmt)
+        {
             statements.push_back(std::move(stmt));
         }
-        
-        llvm::Value* accept(ASTVisitor& visitor) override;
+
+        llvm::Value *accept(ASTVisitor &visitor) override;
     };
 
-    class ExprStmt : public Stmt {
+    class ExprStmt : public Stmt
+    {
     public:
         std::unique_ptr<Expr> expr;
-        
-        explicit ExprStmt(std::unique_ptr<Expr> expr) 
+
+        explicit ExprStmt(std::unique_ptr<Expr> expr)
             : expr(std::move(expr)) {}
-            
-        llvm::Value* accept(ASTVisitor& visitor) override;
+
+        llvm::Value *accept(ASTVisitor &visitor) override;
     };
 
-    class DefStmt : public Stmt {
+    class DefStmt : public Stmt
+    {
     public:
         VarExpr var;
         std::unique_ptr<Expr> initValue;
-        
+
         DefStmt(VarExpr var, std::unique_ptr<Expr> initValue)
             : var(std::move(var)), initValue(std::move(initValue)) {}
-            
-        llvm::Value* accept(ASTVisitor& visitor) override;
+
+        llvm::Value *accept(ASTVisitor &visitor) override;
     };
 
     class CallExpr : public Expr
@@ -181,8 +195,6 @@ namespace miniC
     class ASTVisitor
     {
 
-
-
     public:
         virtual ~ASTVisitor() = default;
         virtual llvm::Value *visit(BinaryExpr &expr) = 0;
@@ -200,14 +212,23 @@ namespace miniC
     {
 
     protected:
-        static std::unique_ptr<llvm::LLVMContext> context;
-        static std::unique_ptr<llvm::Module> module;
-        static std::unique_ptr<llvm::IRBuilder<>> builder;
-        static std::map<std::string, llvm::Value *> namedValues;
+        std::unique_ptr<llvm::LLVMContext> context;
+        std::unique_ptr<llvm::Module> module;
+        std::unique_ptr<llvm::IRBuilder<>> builder;
+        std::map<std::string, llvm::Value *> namedValues;
         // Maps miniC types to their corresponding LLVM type constructors
-        static const std::map<miniC::Type, llvm::Type *> typeMap;
+        const std::map<miniC::Type, llvm::Type *> typeMap;
+        // for llvm opt
+        // Create new pass and analysis managers.
+        std::unique_ptr<llvm::FunctionPassManager> TheFPM;
+        std::unique_ptr<llvm::LoopAnalysisManager> TheLAM;
+        std::unique_ptr<llvm::FunctionAnalysisManager> TheFAM;
+        std::unique_ptr<llvm::CGSCCAnalysisManager> TheCGAM;
+        std::unique_ptr<llvm::ModuleAnalysisManager> TheMAM;
+        std::unique_ptr<llvm::PassInstrumentationCallbacks> ThePIC;
 
     public:
+        IRGenerator();
         llvm::Value *visit(BinaryExpr &expr) override;
         llvm::Value *visit(LiteralExpr &expr) override;
         llvm::Value *visit(VarExpr &expr) override;

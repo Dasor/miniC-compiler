@@ -3,20 +3,41 @@
 using namespace miniC;
 using namespace llvm;
 
-// Initialize static members
-std::unique_ptr<llvm::LLVMContext> IRGenerator::context = std::make_unique<llvm::LLVMContext>();
-std::unique_ptr<llvm::Module> IRGenerator::module = std::make_unique<llvm::Module>("miniC", *IRGenerator::context);
-std::unique_ptr<llvm::IRBuilder<>> IRGenerator::builder = std::make_unique<llvm::IRBuilder<>>(*IRGenerator::context);
-std::map<std::string, llvm::Value *> IRGenerator::namedValues;
-const std::map<miniC::Type, llvm::Type *> IRGenerator::typeMap = {
-    {miniC::Type::Int, llvm::Type::getInt32Ty(*IRGenerator::context)},
-    {miniC::Type::Float, llvm::Type::getFloatTy(*IRGenerator::context)},
-    {miniC::Type::Char, llvm::Type::getInt8Ty(*IRGenerator::context)},
-    {miniC::Type::String, llvm::ArrayType::get(llvm::Type::getInt8Ty(*IRGenerator::context), 0)},
-    {miniC::Type::Void, llvm::Type::getVoidTy(*IRGenerator::context)},
-    {miniC::Type::Unknown, nullptr}};
-// Accept method implementations for AST nodes
+IRGenerator::IRGenerator()
+{
+    context = std::make_unique<llvm::LLVMContext>();
+    module = std::make_unique<llvm::Module>("miniC", *context);
+    builder = std::make_unique<llvm::IRBuilder<>>(*context);
 
+    namedValues = {};
+
+    const std::map<miniC::Type, llvm::Type *> typeMap = {
+        {miniC::Type::Int, llvm::Type::getInt32Ty(*context)},
+        {miniC::Type::Float, llvm::Type::getFloatTy(*context)},
+        {miniC::Type::Char, llvm::Type::getInt8Ty(*context)},
+        {miniC::Type::String, llvm::ArrayType::get(llvm::Type::getInt8Ty(*context), 0)},
+        {miniC::Type::Void, llvm::Type::getVoidTy(*context)},
+        {miniC::Type::Unknown, nullptr}};
+
+    TheFPM = std::make_unique<llvm::FunctionPassManager>();
+    TheLAM = std::make_unique<llvm::LoopAnalysisManager>();
+    TheFAM = std::make_unique<llvm::FunctionAnalysisManager>();
+    TheCGAM = std::make_unique<llvm::CGSCCAnalysisManager>();
+    TheMAM = std::make_unique<llvm::ModuleAnalysisManager>();
+    ThePIC = std::make_unique<llvm::PassInstrumentationCallbacks>();
+
+    TheFPM->addPass(InstCombinePass());
+    TheFPM->addPass(ReassociatePass());
+    TheFPM->addPass(GVNPass());
+    TheFPM->addPass(SimplifyCFGPass());
+
+    PassBuilder PB;
+    PB.registerModuleAnalyses(*TheMAM);
+    PB.registerFunctionAnalyses(*TheFAM);
+    PB.crossRegisterProxies(*TheLAM, *TheFAM, *TheCGAM, *TheMAM);
+}
+
+// Accept method implementations for AST nodes
 Value *BinaryExpr::accept(ASTVisitor &visitor)
 {
     return visitor.visit(*this);
@@ -365,6 +386,7 @@ llvm::Function *IRGenerator::visit(Function &func)
             F->eraseFromParent();
             return nullptr;
         }
+        //TheFPM->run(*F, *TheFAM);
         return F;
     }
 
