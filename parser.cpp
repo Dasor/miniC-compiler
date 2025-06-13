@@ -113,7 +113,33 @@ std::unique_ptr<Expr> Parser::parseIdentifierExpr()
 {
     std::string name = currentToken.lexeme;
     nextToken();
-    return std::make_unique<VarExpr>(name);
+
+    if (!match(TokenKind::LParen))
+    {
+        // It's a variable, not a function call
+        return std::make_unique<VarExpr>(name);
+    }
+    nextToken(); // Eat the '('
+
+    std::vector<std::unique_ptr<Expr>> args;
+    while (!match(TokenKind::RParen))
+    {
+        if (currentToken.kind == TokenKind::EOF_TOK)
+        {
+            throw std::runtime_error("Unexpected end of input in function call");
+        }
+        args.push_back(parseExpression());
+        if (expect(TokenKind::Comma))
+        {
+        }
+        else if (!match(TokenKind::RParen))
+        {
+            throw std::runtime_error("Expected ',' or ')' in function call arguments");
+        }
+    }
+    nextToken(); // Eat the ')'
+
+    return std::make_unique<CallExpr>(name, std::move(args));
 }
 
 std::unique_ptr<Stmt> Parser::parseDefinition()
@@ -259,22 +285,10 @@ std::unique_ptr<Prototype> Parser::parsePrototype()
     Type returnType = Type::Int;
     if (match(TokenKind::Kw_Int, TokenKind::Kw_Void))
     {
-        switch (currentToken.kind)
+        returnType = tokenToType[currentToken.kind];
+        if (returnType == Type::Unknown)
         {
-        case TokenKind::Kw_Int:
-            returnType = Type::Int;
-            break;
-        case TokenKind::Kw_Float:
-            returnType = Type::Float;
-            break;
-        case TokenKind::Kw_Char:
-            returnType = Type::Char;
-            break;
-        case TokenKind::Kw_Void:
-            returnType = Type::Void;
-            break;
-        default:
-            throw std::runtime_error("Unexpected return type");
+            throw std::runtime_error("Unknown return type in prototype");
         }
     }
     else
@@ -305,9 +319,21 @@ std::unique_ptr<Prototype> Parser::parsePrototype()
 
     while (!match(TokenKind::RParen))
     {
+        // parse parameter type
+        Type paramType = Type::Int; // default to int
+        if (match(TokenKind::Kw_Int, TokenKind::Kw_Float))
+        {
+            paramType = tokenToType[currentToken.kind];
+            nextToken(); // Eat the type keyword
+        }
+        else
+        {
+            throw std::runtime_error("Expected parameter type");
+        }
+
         if (currentToken.kind == TokenKind::Identifier)
         {
-            params.emplace_back(currentToken.lexeme);
+            params.emplace_back(currentToken.lexeme, paramType);
             nextToken();
 
             if (match(TokenKind::Comma))
@@ -334,6 +360,13 @@ std::unique_ptr<Function> Parser::parseFunction()
         return nullptr;
     }
 
+    if (match(TokenKind::Semicolon))
+    {
+        // Function prototype without body
+        nextToken();
+        return std::make_unique<Function>(std::move(proto), nullptr);
+    }
+
     // Parse function body
     auto body = parseBlock();
     if (!body && proto->returnType != Type::Void)
@@ -341,17 +374,14 @@ std::unique_ptr<Function> Parser::parseFunction()
         throw std::runtime_error("Function with non-void return type cannot have an empty body");
     }
 
-    // Verify function and print possible errors
-
     return std::make_unique<Function>(std::move(proto), std::move(body));
 }
 
-/// top ::= definition | expression
 void Parser::MainLoop()
 {
+    nextToken();
     while (true)
     {
-        nextToken();
         if (currentToken.kind == TokenKind::EOF_TOK)
             break;
 

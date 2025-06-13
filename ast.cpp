@@ -134,17 +134,20 @@ Value *IRGenerator::visit(BinaryExpr &expr)
     }
 
     // Get types of operands
-    Type lhsType = expr.lhs->getType();
-    Type rhsType = expr.rhs->getType();
+
+    llvm::Type *lhsType = LHS->getType();
+    llvm::Type *rhsType = RHS->getType();
 
     // If its a pointer load the value
     if (auto *allocaLHS = dyn_cast<AllocaInst>(LHS))
     {
         LHS = builder->CreateLoad(allocaLHS->getAllocatedType(), allocaLHS, "loadlhs");
+        lhsType = LHS->getType(); // Update type after load
     }
     if (auto *allocaRHS = dyn_cast<AllocaInst>(RHS))
     {
         RHS = builder->CreateLoad(allocaRHS->getAllocatedType(), allocaRHS, "loadrhs");
+        rhsType = RHS->getType(); // Update type after load
     }
 
 
@@ -152,17 +155,17 @@ Value *IRGenerator::visit(BinaryExpr &expr)
     if (lhsType != rhsType)
     {
         // Handle type conversion if needed
-        if (lhsType == Type::Float || rhsType == Type::Float)
+        if (lhsType->isFloatTy() || rhsType->isFloatTy())
         {
-            if (lhsType != Type::Float)
+            if (!lhsType->isFloatTy())
             {
                 LHS = builder->CreateSIToFP(LHS, llvm::Type::getFloatTy(*context), "convfloat");
             }
-            if (rhsType != Type::Float)
+            if (!rhsType->isFloatTy())
             {
                 RHS = builder->CreateSIToFP(RHS, llvm::Type::getFloatTy(*context), "convfloat");
             }
-            expr.setType(Type::Float);
+            //expr.setType(Type::Float);
         }
         else
         {
@@ -170,10 +173,10 @@ Value *IRGenerator::visit(BinaryExpr &expr)
             return nullptr;
         }
     }
-    else
+    /*else
     {
         expr.setType(lhsType);
-    }
+    }*/
 
     // Generate IR based on operation and types
     switch (expr.op)
@@ -306,7 +309,7 @@ llvm::Function *IRGenerator::visit(Function &func)
     }
 
     // Check if the function has a body
-    if (!func.body)
+    if (func.body->statements.size() == 0)
     {
         // If no body, return void for void functions
         if (func.proto->returnType == Type::Void)
@@ -410,6 +413,10 @@ bool VarExpr::typeCheck()
 bool LiteralExpr::typeCheck()
 {
     // Literal expressions are always valid
+    return true;
+}
+
+bool CallExpr::typeCheck() {
     return true;
 }
 

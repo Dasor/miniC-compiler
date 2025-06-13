@@ -150,6 +150,7 @@ namespace miniC
             : callee(callee), args(std::move(args)) {}
 
         llvm::Value *accept(ASTVisitor &visitor) override;
+        bool typeCheck() override;
     };
 
     class Prototype : public ASTNode
