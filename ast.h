@@ -192,6 +192,18 @@ namespace miniC
         llvm::Function *accept(ASTVisitor &visitor) override;
     };
 
+    class IfStmt : public Stmt
+    {
+    public:
+            std::unique_ptr<Expr> Cond;
+            std::unique_ptr<Stmt> Then, Else;
+
+        IfStmt(std::unique_ptr<Expr> cond, std::unique_ptr<Stmt> thenStmt, std::unique_ptr<Stmt> elseStmt)
+            : Cond(std::move(cond)), Then(std::move(thenStmt)), Else(std::move(elseStmt)) {}
+
+        llvm::Value *accept(ASTVisitor &visitor) override;
+    };
+
     class ASTVisitor
     {
 
@@ -206,6 +218,7 @@ namespace miniC
         virtual llvm::Value *visit(BlockStmt &stmt) = 0;
         virtual llvm::Value *visit(ExprStmt &stmt) = 0;
         virtual llvm::Value *visit(DefStmt &stmt) = 0;
+        virtual llvm::Value *visit(IfStmt &stmt) = 0;
     };
 
     class IRGenerator : public ASTVisitor
@@ -238,6 +251,7 @@ namespace miniC
         llvm::Value *visit(BlockStmt &stmt) override;
         llvm::Value *visit(ExprStmt &stmt) override;
         llvm::Value *visit(DefStmt &stmt) override;
+        llvm::Value *visit(IfStmt &stmt) override;
 
         // Additional methods for IR generation
         void generateIR(const std::vector<std::unique_ptr<ASTNode>> &astNodes);

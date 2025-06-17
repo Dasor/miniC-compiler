@@ -35,6 +35,7 @@ private:
     std::unique_ptr<Expr> parseBinOpRHS(int precedence, std::unique_ptr<Expr> lhs);
     std::unique_ptr<Stmt> parseStatement();
     std::unique_ptr<BlockStmt> parseBlock();
+    std::unique_ptr<IfStmt> parseIfStmt();
 
     // Precedence table
     int getTokenPrecedence(TokenKind op);

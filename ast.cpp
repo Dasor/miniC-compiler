@@ -82,6 +82,11 @@ Value *ExprStmt::accept(ASTVisitor &visitor)
 {
     return visitor.visit(*this);
 }
+
+Value *IfStmt::accept(ASTVisitor &visitor)
+{
+    return visitor.visit(*this);
+}
 // Visitor method implementations
 
 Value *IRGenerator::visit(LiteralExpr &expr)
@@ -211,7 +216,7 @@ Value *IRGenerator::visit(BinaryExpr &expr)
             return builder->CreateFMul(LHS, RHS, "fmultmp");
         case TokenKind::Slash:
             return builder->CreateFDiv(LHS, RHS, "fdivtmp");
-       default:
+        default:
             throw std::runtime_error("Unsupported operation for float type");
         }
     }
@@ -227,10 +232,14 @@ Value *IRGenerator::visit(BinaryExpr &expr)
             return builder->CreateMul(LHS, RHS, "multmp");
         case TokenKind::Slash:
             return builder->CreateSDiv(LHS, RHS, "divtmp");
-       default:
+        case TokenKind::EqualEqual:
+            return builder->CreateICmpEQ(LHS, RHS, "eqtmp");
+        default:
             throw std::runtime_error("Unsupported operation for int type");
         }
-    }else if(lhsType->isPointerTy()){
+    }
+    else if (lhsType->isPointerTy())
+    {
         switch (expr.op)
         {
         case TokenKind::Assign:
@@ -405,10 +414,12 @@ llvm::Function *IRGenerator::visit(Function &func)
         // Verify function
         if (verifyFunction(*F, &llvm::errs()))
         {
+            fprintf(stderr, "Error: Function verification failed for %s\n", F->getName().str().c_str());
+            F->print(llvm::errs());
             F->eraseFromParent();
             return nullptr;
         }
-        TheFPM->run(*F, *TheFAM);
+        // TheFPM->run(*F, *TheFAM);
         return F;
     }
 
@@ -454,6 +465,75 @@ llvm::Function *IRGenerator::visit(Prototype &proto)
     }
 
     return func;
+}
+
+llvm::Value *IRGenerator::visit(IfStmt &stmt)
+{
+    // Generate code for the condition
+    Value *condV = stmt.Cond->accept(*this);
+    if (!condV)
+    {
+        return nullptr; // Condition evaluation failed
+    }
+
+    // Convert condition to boolean
+    condV = builder->CreateICmpNE(condV, ConstantInt::get(condV->getType(), 0), "ifcond");
+
+    // Create blocks for then and else branches
+    llvm::Function *F = builder->GetInsertBlock()->getParent();
+    BasicBlock *thenBB = BasicBlock::Create(*context, "then", F);
+    BasicBlock *elseBB = BasicBlock::Create(*context, "else");
+    BasicBlock *mergeBB = BasicBlock::Create(*context, "ifcont");
+
+    // Create conditional branch
+    if (stmt.Else)
+    {
+        builder->CreateCondBr(condV, thenBB, elseBB);
+    }
+    else
+    {
+        builder->CreateCondBr(condV, thenBB, mergeBB);
+    }
+
+    // Generate code for the then branch
+    builder->SetInsertPoint(thenBB);
+    Value *thenV = stmt.Then->accept(*this);
+    if (!thenV)
+    {
+        return nullptr; // Then branch evaluation failed
+    }
+    // Needed so every branch ends with a return or a jump
+    builder->CreateBr(mergeBB); // Jump to merge block
+
+    // Set insert point to else block
+    thenBB = builder->GetInsertBlock();
+
+    Value *elseV = nullptr;
+    F->insert(F->end(), elseBB);
+    builder->SetInsertPoint(elseBB);
+    if (stmt.Else)
+    {
+
+        elseV = stmt.Else->accept(*this);
+        if (!elseV)
+        {
+            return nullptr; // Else branch evaluation failed
+        }
+    }
+
+    builder->CreateBr(mergeBB); // Jump to merge block
+    elseBB = builder->GetInsertBlock();
+
+    // Set insert point to merge block
+    F->insert(F->end(), mergeBB);
+    builder->SetInsertPoint(mergeBB);
+    PHINode *phiNode = builder->CreatePHI(thenV->getType(), 2, "iftmp");
+
+    phiNode->addIncoming(thenV, thenBB);
+    if (stmt.Else)
+        phiNode->addIncoming(elseV, elseBB);
+
+    return phiNode; // If statement does not return a value
 }
 
 bool VarExpr::typeCheck()

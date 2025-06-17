@@ -88,3 +88,25 @@ TEST_CASE("Correct compilation", "[compiler]")
         }
     }
 }
+
+TEST_CASE("Compiler handles control flow", "[compiler]")
+{
+    fs::path case_dir = "tests/cases/controlFlow";
+    fs::path expected_dir = "tests/expected/controlFlow";
+
+    for (const auto &entry : fs::directory_iterator(case_dir))
+    {
+        if (entry.path().extension() != ".c")
+            continue;
+
+        std::string name = entry.path().stem(); // e.g. "basic_add"
+        fs::path expected_file = expected_dir / (name + ".txt");
+
+        SECTION("Test case: " + name)
+        {
+            int expected = read_expected(expected_file);
+            int actual = run_test(entry.path());
+            REQUIRE(actual == expected);
+        }
+    }
+}
