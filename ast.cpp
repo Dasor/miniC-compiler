@@ -144,6 +144,7 @@ Value *IRGenerator::visit(DefStmt &stmt)
     return alloca;
 }
 
+// TODO: This is getting too big and should be refactored
 Value *IRGenerator::visit(BinaryExpr &expr)
 {
     Value *LHS = expr.lhs->accept(*this);
@@ -158,11 +159,14 @@ Value *IRGenerator::visit(BinaryExpr &expr)
     llvm::Type *lhsType = LHS->getType();
     llvm::Type *rhsType = RHS->getType();
 
-    // If it's a pointer, load the value
-    if (auto *allocaLHS = dyn_cast<AllocaInst>(LHS))
+    // If it's a pointer, load the value except for assignment do not load lhs
+    if (expr.op != TokenKind::Assign)
     {
-        LHS = builder->CreateLoad(allocaLHS->getAllocatedType(), allocaLHS, "loadlhs");
-        lhsType = LHS->getType(); // Update type after load
+        if (auto *allocaLHS = dyn_cast<AllocaInst>(LHS))
+        {
+            LHS = builder->CreateLoad(allocaLHS->getAllocatedType(), allocaLHS, "loadlhs");
+            lhsType = LHS->getType(); // Update type after load
+        }
     }
     if (auto *allocaRHS = dyn_cast<AllocaInst>(RHS))
     {
@@ -171,7 +175,7 @@ Value *IRGenerator::visit(BinaryExpr &expr)
     }
 
     // Type checking and conversion
-    if (lhsType != rhsType)
+    if (lhsType != rhsType && !lhsType->isPointerTy())
     {
         // Handle type conversion if needed
         if (lhsType->isFloatTy() || rhsType->isFloatTy())
@@ -207,8 +211,8 @@ Value *IRGenerator::visit(BinaryExpr &expr)
             return builder->CreateFMul(LHS, RHS, "fmultmp");
         case TokenKind::Slash:
             return builder->CreateFDiv(LHS, RHS, "fdivtmp");
-        default:
-            return nullptr;
+       default:
+            throw std::runtime_error("Unsupported operation for float type");
         }
     }
     else if (lhsType->isIntegerTy())
@@ -223,9 +227,27 @@ Value *IRGenerator::visit(BinaryExpr &expr)
             return builder->CreateMul(LHS, RHS, "multmp");
         case TokenKind::Slash:
             return builder->CreateSDiv(LHS, RHS, "divtmp");
-        default:
-            return nullptr;
+       default:
+            throw std::runtime_error("Unsupported operation for int type");
         }
+    }else if(lhsType->isPointerTy()){
+        switch (expr.op)
+        {
+        case TokenKind::Assign:
+            // For assignment, store the value in the alloca
+            builder->CreateStore(RHS, LHS);
+            return LHS; // Return the alloca
+        case TokenKind::Plus:
+        case TokenKind::Minus:
+            // Pointer arithmetic is not supported in this context
+            throw std::runtime_error("Pointer arithmetic not supported");
+        default:
+            throw std::runtime_error("Unsupported operation for pointer type");
+        }
+    }
+    else
+    {
+        throw std::runtime_error("Unsupported operand types for binary operation");
     }
 
     return nullptr;
@@ -386,7 +408,7 @@ llvm::Function *IRGenerator::visit(Function &func)
             F->eraseFromParent();
             return nullptr;
         }
-        //TheFPM->run(*F, *TheFAM);
+        TheFPM->run(*F, *TheFAM);
         return F;
     }
 
