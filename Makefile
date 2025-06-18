@@ -1,12 +1,12 @@
 # Compiler and flags
 CXX := g++
-CXXFLAGS := -std=c++17 -Wall -Wno-switch -Wextra -g -lLLVM
+CXXFLAGS := -std=c++17 -Wall -Wno-unused-parameter -Wno-switch -Wextra -g -lLLVM
 
 # Output binary name
 TARGET := comp
 
 # Source files
-SRCS := main.cpp lexer.cpp parser.cpp ast.cpp
+SRCS := main.cpp lexer.cpp parser.cpp ast.cpp binaryOps.cpp
 
 # Object files (replace .cpp with .o)
 OBJS := $(SRCS:.cpp=.o)

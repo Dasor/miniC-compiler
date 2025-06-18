@@ -4,6 +4,7 @@
 #include <string>
 #include <memory>
 #include "lexer.h"
+#include "binaryOps.h"
 #include <map>
 #include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/STLExtras.h"

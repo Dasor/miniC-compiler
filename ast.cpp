@@ -203,63 +203,11 @@ Value *IRGenerator::visit(BinaryExpr &expr)
         }
     }
 
-    // Generate IR based on operation and types
-    if (lhsType->isFloatTy())
-    {
-        switch (expr.op)
-        {
-        case TokenKind::Plus:
-            return builder->CreateFAdd(LHS, RHS, "faddtmp");
-        case TokenKind::Minus:
-            return builder->CreateFSub(LHS, RHS, "fsubtmp");
-        case TokenKind::Star:
-            return builder->CreateFMul(LHS, RHS, "fmultmp");
-        case TokenKind::Slash:
-            return builder->CreateFDiv(LHS, RHS, "fdivtmp");
-        default:
-            throw std::runtime_error("Unsupported operation for float type");
-        }
-    }
-    else if (lhsType->isIntegerTy())
-    {
-        switch (expr.op)
-        {
-        case TokenKind::Plus:
-            return builder->CreateAdd(LHS, RHS, "addtmp");
-        case TokenKind::Minus:
-            return builder->CreateSub(LHS, RHS, "subtmp");
-        case TokenKind::Star:
-            return builder->CreateMul(LHS, RHS, "multmp");
-        case TokenKind::Slash:
-            return builder->CreateSDiv(LHS, RHS, "divtmp");
-        case TokenKind::EqualEqual:
-            return builder->CreateICmpEQ(LHS, RHS, "eqtmp");
-        default:
-            throw std::runtime_error("Unsupported operation for int type");
-        }
-    }
-    else if (lhsType->isPointerTy())
-    {
-        switch (expr.op)
-        {
-        case TokenKind::Assign:
-            // For assignment, store the value in the alloca
-            builder->CreateStore(RHS, LHS);
-            return LHS; // Return the alloca
-        case TokenKind::Plus:
-        case TokenKind::Minus:
-            // Pointer arithmetic is not supported in this context
-            throw std::runtime_error("Pointer arithmetic not supported");
-        default:
-            throw std::runtime_error("Unsupported operation for pointer type");
-        }
-    }
-    else
-    {
-        throw std::runtime_error("Unsupported operand types for binary operation");
-    }
+    // use Strategy pattern for binary operations
+    std::unique_ptr<BinaryOp> binOp = BinaryOpBuilder::createBinaryOp(lhsType);
+    llvm::Value* res = binOp->perform(LHS, RHS, expr.op, *builder);
+    return res ? res : nullptr; // Return result or nullptr on failure
 
-    return nullptr;
 }
 
 Value *IRGenerator::visit(BlockStmt &stmt)
@@ -419,7 +367,7 @@ llvm::Function *IRGenerator::visit(Function &func)
             F->eraseFromParent();
             return nullptr;
         }
-        // TheFPM->run(*F, *TheFAM);
+        //TheFPM->run(*F, *TheFAM);
         return F;
     }
 
@@ -527,13 +475,10 @@ llvm::Value *IRGenerator::visit(IfStmt &stmt)
     // Set insert point to merge block
     F->insert(F->end(), mergeBB);
     builder->SetInsertPoint(mergeBB);
-    PHINode *phiNode = builder->CreatePHI(thenV->getType(), 2, "iftmp");
 
-    phiNode->addIncoming(thenV, thenBB);
-    if (stmt.Else)
-        phiNode->addIncoming(elseV, elseBB);
+    // No phi node needed since we aren't using SSA but rather alloca, can return anything (doesn't matter)
 
-    return phiNode; // If statement does not return a value
+    return condV;
 }
 
 bool VarExpr::typeCheck()
