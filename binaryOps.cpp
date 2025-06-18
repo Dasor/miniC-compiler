@@ -60,6 +60,9 @@ llvm::Value* BinaryOp::perform(llvm::Value* lhs, llvm::Value* rhs, miniC::TokenK
     case TokenKind::Not:
         return this->logicalNot(lhs, builder);
         break;
+    case TokenKind::PlusPlus:
+        return this->increase(lhs, builder);
+        break;
     default:
         throw std::runtime_error("Unsupported binary operation: " + std::to_string(static_cast<int>(op)));
         break;
@@ -155,6 +158,10 @@ llvm::Value* IntBinaryOp::logicalNot(llvm::Value* operand, llvm::IRBuilder<>& bu
     return builder.CreateICmpEQ(operand, builder.getInt32(0), "nottmp");
 }
 
+llvm::Value* IntBinaryOp::increase(llvm::Value* operand, llvm::IRBuilder<>& builder) {
+    return builder.CreateAdd(operand, builder.getInt32(1), "incrtmp");
+}
+
 // FloatBinaryOp implementations
 llvm::Value* FloatBinaryOp::add(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>& builder) {
     return builder.CreateFAdd(lhs, rhs, "faddtmp");
@@ -233,6 +240,10 @@ llvm::Value* FloatBinaryOp::logicalNot(llvm::Value* operand, llvm::IRBuilder<>& 
     return builder.CreateFCmpOEQ(operand, llvm::ConstantFP::get(operand->getType(), 0.0), "fnottmp");
 }
 
+llvm::Value* FloatBinaryOp::increase(llvm::Value* operand, llvm::IRBuilder<>& builder) {
+    return builder.CreateFAdd(operand, llvm::ConstantFP::get(operand->getType(), 1.0), "fincrtmp");
+}
+
 // PtrBinaryOp implementations
 llvm::Value* PtrBinaryOp::add(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>& builder) {
     throw std::runtime_error("Unsupported operation for pointer types");
@@ -304,5 +315,9 @@ llvm::Value* PtrBinaryOp::logicalOr(llvm::Value* lhs, llvm::Value* rhs, llvm::IR
 }
 
 llvm::Value* PtrBinaryOp::logicalNot(llvm::Value* operand, llvm::IRBuilder<>& builder) {
+    throw std::runtime_error("Unsupported operation for pointer types");
+}
+
+llvm::Value* PtrBinaryOp::increase(llvm::Value* operand, llvm::IRBuilder<>& builder) {
     throw std::runtime_error("Unsupported operation for pointer types");
 }

@@ -87,6 +87,15 @@ Value *IfStmt::accept(ASTVisitor &visitor)
 {
     return visitor.visit(*this);
 }
+
+Value *ForStmt::accept(ASTVisitor &visitor)
+{
+    return visitor.visit(*this);
+}
+
+Value *UnaryExpr::accept(ASTVisitor &visitor){
+    return visitor.visit(*this);
+}
 // Visitor method implementations
 
 Value *IRGenerator::visit(LiteralExpr &expr)
@@ -205,9 +214,25 @@ Value *IRGenerator::visit(BinaryExpr &expr)
 
     // use Strategy pattern for binary operations
     std::unique_ptr<BinaryOp> binOp = BinaryOpBuilder::createBinaryOp(lhsType);
-    llvm::Value* res = binOp->perform(LHS, RHS, expr.op, *builder);
+    llvm::Value *res = binOp->perform(LHS, RHS, expr.op, *builder);
     return res ? res : nullptr; // Return result or nullptr on failure
+}
 
+Value *IRGenerator::visit(UnaryExpr &expr)
+{
+
+    Value *Operand = expr.operand->accept(*this);
+    llvm::Type *operandType = Operand->getType();
+
+    if (auto *allocaOp = dyn_cast<AllocaInst>(Operand))
+    {
+        Operand = builder->CreateLoad(allocaOp->getAllocatedType(), allocaOp, "loadlhs");
+        operandType = Operand->getType(); // Update type after load
+    }
+
+    std::unique_ptr<BinaryOp> binOp = BinaryOpBuilder::createBinaryOp(operandType);
+    llvm::Value *res = binOp->perform(Operand,nullptr,expr.op,*builder);
+    return res ? res : nullptr; // Return result or nullptr on failure
 }
 
 Value *IRGenerator::visit(BlockStmt &stmt)
@@ -367,7 +392,7 @@ llvm::Function *IRGenerator::visit(Function &func)
             F->eraseFromParent();
             return nullptr;
         }
-        //TheFPM->run(*F, *TheFAM);
+        // TheFPM->run(*F, *TheFAM);
         return F;
     }
 
@@ -481,6 +506,53 @@ llvm::Value *IRGenerator::visit(IfStmt &stmt)
     return condV;
 }
 
+llvm::Value *IRGenerator::visit(ForStmt &stmt)
+{
+    // Create a new basic block for the loop
+    llvm::Function *F = builder->GetInsertBlock()->getParent();
+    BasicBlock *loopBB = BasicBlock::Create(*context, "loop", F);
+    BasicBlock *innerBB = BasicBlock::Create(*context, "innerloop");
+    BasicBlock *afterBB = BasicBlock::Create(*context, "afterloop");
+
+    // Generate code for the initialization
+    if (stmt.Init)
+    {
+        stmt.Init->accept(*this);
+    }
+
+    // Create the loop condition block
+    builder->CreateBr(loopBB);
+    builder->SetInsertPoint(loopBB);
+
+    // Generate code for the condition
+    Value *condV = stmt.Cond->accept(*this);
+    if (!condV)
+    {
+        return nullptr; // Condition evaluation failed
+    }
+
+    // Convert condition to boolean
+    condV = builder->CreateICmpNE(condV, ConstantInt::get(condV->getType(), 0), "forcond");
+
+    // Create conditional branch
+    builder->CreateCondBr(condV, innerBB, afterBB);
+
+    // Generate code for the step
+    if (stmt.Step)
+    {
+        stmt.Step->accept(*this);
+    }
+
+    // Jump back to the loop condition
+    builder->CreateBr(loopBB);
+
+    // Set insert point to after the loop
+    F->insert(F->end(), afterBB);
+    builder->SetInsertPoint(afterBB);
+
+    return condV; // No value to return from a for statement
+}
+
 bool VarExpr::typeCheck()
 {
     return true;
@@ -532,5 +604,10 @@ bool BinaryExpr::typeCheck()
         return false;
     }
 
+    return true;
+}
+
+bool UnaryExpr::typeCheck()
+{
     return true;
 }

@@ -23,7 +23,8 @@
     llvm::Value* notEqual(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>& builder) override; \
     llvm::Value* logicalAnd(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>& builder) override; \
     llvm::Value* logicalOr(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>& builder) override; \
-    llvm::Value* logicalNot(llvm::Value* operand, llvm::IRBuilder<>& builder) override;
+    llvm::Value* logicalNot(llvm::Value* operand, llvm::IRBuilder<>& builder) override; \
+    llvm::Value* increase(llvm::Value* operand, llvm::IRBuilder<>& builder) override;
 
 
 // Strategy pattern for binary operations
@@ -54,6 +55,7 @@ public:
     virtual llvm::Value* logicalAnd(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>& builder) = 0;
     virtual llvm::Value* logicalOr(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>& builder) = 0;
     virtual llvm::Value* logicalNot(llvm::Value* operand, llvm::IRBuilder<>& builder) = 0;
+    virtual llvm::Value* increase(llvm::Value* operand, llvm::IRBuilder<>& builder) = 0;
 }; 
 
 class BinaryOpBuilder {

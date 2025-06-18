@@ -92,6 +92,19 @@ namespace miniC
         bool typeCheck() override;
     };
 
+    class UnaryExpr : public Expr
+    {
+    public:
+        TokenKind op;
+        std::unique_ptr<Expr> operand;
+
+        UnaryExpr(TokenKind op, std::unique_ptr<Expr> operand)
+            : op(op), operand(std::move(operand)) {}
+
+        llvm::Value *accept(ASTVisitor &visitor) override;
+        bool typeCheck() override;
+    };
+
     class LiteralExpr : public Expr
     {
     public:
@@ -205,12 +218,26 @@ namespace miniC
         llvm::Value *accept(ASTVisitor &visitor) override;
     };
 
+    class ForStmt : public Stmt
+    {
+        public:
+            std::unique_ptr<Stmt> Init; 
+            std::unique_ptr<Expr> Cond, Step;
+            std::unique_ptr<BlockStmt> Body;
+
+        ForStmt(std::unique_ptr<Stmt> init, std::unique_ptr<Expr> cond, std::unique_ptr<Expr> step, std::unique_ptr<BlockStmt> body)
+            : Init(std::move(init)), Cond(std::move(cond)), Step(std::move(step)), Body(std::move(body)) {}
+
+        llvm::Value *accept(ASTVisitor &visitor) override;
+    };
+
     class ASTVisitor
     {
 
     public:
         virtual ~ASTVisitor() = default;
         virtual llvm::Value *visit(BinaryExpr &expr) = 0;
+        virtual llvm::Value *visit(UnaryExpr &expr) = 0;
         virtual llvm::Value *visit(LiteralExpr &expr) = 0;
         virtual llvm::Value *visit(VarExpr &expr) = 0;
         virtual llvm::Value *visit(CallExpr &expr) = 0;
@@ -220,6 +247,7 @@ namespace miniC
         virtual llvm::Value *visit(ExprStmt &stmt) = 0;
         virtual llvm::Value *visit(DefStmt &stmt) = 0;
         virtual llvm::Value *visit(IfStmt &stmt) = 0;
+        virtual llvm::Value *visit(ForStmt &stmt) = 0;
     };
 
     class IRGenerator : public ASTVisitor
@@ -244,6 +272,7 @@ namespace miniC
     public:
         IRGenerator();
         llvm::Value *visit(BinaryExpr &expr) override;
+        llvm::Value *visit(UnaryExpr &expr) override;
         llvm::Value *visit(LiteralExpr &expr) override;
         llvm::Value *visit(VarExpr &expr) override;
         llvm::Value *visit(CallExpr &expr) override;
@@ -253,6 +282,7 @@ namespace miniC
         llvm::Value *visit(ExprStmt &stmt) override;
         llvm::Value *visit(DefStmt &stmt) override;
         llvm::Value *visit(IfStmt &stmt) override;
+        llvm::Value *visit(ForStmt &stmt) override;
 
         // Additional methods for IR generation
         void generateIR(const std::vector<std::unique_ptr<ASTNode>> &astNodes);

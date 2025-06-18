@@ -36,6 +36,7 @@ private:
     std::unique_ptr<Stmt> parseStatement();
     std::unique_ptr<BlockStmt> parseBlock();
     std::unique_ptr<IfStmt> parseIfStmt();
+    std::unique_ptr<ForStmt> parseForStmt();
 
     // Precedence table
     int getTokenPrecedence(TokenKind op);

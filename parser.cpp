@@ -80,6 +80,8 @@ int Parser::getTokenPrecedence(TokenKind op)
     case TokenKind::GreaterEqual:
         return 80;
     case TokenKind::Plus:
+    case TokenKind::PlusPlus:
+    case TokenKind::MinusMinus:
     case TokenKind::Minus:
         return 90;
     case TokenKind::Star:
@@ -162,10 +164,6 @@ std::unique_ptr<Stmt> Parser::parseDefinition()
             throw std::runtime_error("Expected expression after '='");
         }
     }
-    else
-    {
-        EXPECT_SEMICOLON();
-    }
     VarExpr var(name, tokenToType[type]);
     return std::make_unique<DefStmt>(var, std::move(initValue));
 }
@@ -196,6 +194,13 @@ std::unique_ptr<Expr> Parser::parseExpression()
         nextToken();
 
     auto lhs = parsePrimary();
+    // check if the expression is unary
+    if(currentToken.kind == TokenKind::PlusPlus || currentToken.kind == TokenKind::MinusMinus){
+       auto expr = std::make_unique<UnaryExpr>(currentToken.kind, std::move(lhs));
+       // eat Unary op
+       nextToken();
+       return expr;
+    }
     auto expr = parseBinOpRHS(0, std::move(lhs));
     return expr;
 }
@@ -216,6 +221,14 @@ std::unique_ptr<Stmt> Parser::parseStatement()
             throw std::runtime_error("Failed to parse 'if' statement");
         }
         return ifStmt;
+    }
+    else if(currentToken.kind == TokenKind::Kw_For){
+        auto forStmt = parseForStmt();
+        if (!forStmt)
+        {
+            throw std::runtime_error("Failed to parse 'for' statement");
+        }
+        return forStmt;
     }
     else
     {
@@ -415,7 +428,15 @@ std::unique_ptr<IfStmt> Parser::parseIfStmt()
     if (match(TokenKind::Kw_Else))
     {
         nextToken(); // Eat 'else'
-        elseStmt = parseBlock();
+        if (match(TokenKind::Kw_If))
+        {
+            // Nested if statement
+            elseStmt = parseIfStmt();
+        }
+        else
+        {
+            elseStmt = parseBlock();
+        }
         if (!elseStmt)
         {
             throw std::runtime_error("Expected block after 'else'");
@@ -423,6 +444,55 @@ std::unique_ptr<IfStmt> Parser::parseIfStmt()
     }
 
     return std::make_unique<IfStmt>(std::move(cond), std::move(thenStmt), std::move(elseStmt));
+}
+
+std::unique_ptr<ForStmt> Parser::parseForStmt(){
+    // eat for
+    nextToken();
+
+    if (!expect(TokenKind::LParen))
+    {
+        throw std::runtime_error("Expected '(' after 'for'");
+    }
+    // Parse initialization
+    std::unique_ptr<Stmt> init;
+    if (currentToken.kind == TokenKind::Kw_Int || currentToken.kind == TokenKind::Kw_Float ||
+        currentToken.kind == TokenKind::Kw_Char)
+    {
+        init = parseDefinition();
+    }
+
+    EXPECT_SEMICOLON();
+
+    // Parse condition
+    std::unique_ptr<Expr> cond;
+    cond = parseExpression();
+    if (!cond)
+    {
+        throw std::runtime_error("Expected condition expression in 'for' statement");
+    }
+
+    EXPECT_SEMICOLON();
+
+    // Parse step
+    std::unique_ptr<Expr> step;
+    step = parseExpression();
+    if (!step)
+    {
+        throw std::runtime_error("Expected step expression in 'for' statement");
+    }
+    if (!expect(TokenKind::RParen))
+    {
+        throw std::runtime_error("Expected ')' after 'for' condition");
+    }
+    // Parse body
+    auto body = parseBlock();
+    if (!body)
+    {
+        throw std::runtime_error("Expected block after 'for' condition");
+    }
+
+    return std::make_unique<ForStmt>(std::move(init), std::move(cond), std::move(step), std::move(body));
 }
 
 void Parser::MainLoop()
