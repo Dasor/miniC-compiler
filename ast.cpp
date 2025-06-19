@@ -93,7 +93,8 @@ Value *ForStmt::accept(ASTVisitor &visitor)
     return visitor.visit(*this);
 }
 
-Value *UnaryExpr::accept(ASTVisitor &visitor){
+Value *UnaryExpr::accept(ASTVisitor &visitor)
+{
     return visitor.visit(*this);
 }
 // Visitor method implementations
@@ -173,7 +174,7 @@ Value *IRGenerator::visit(BinaryExpr &expr)
     llvm::Type *lhsType = LHS->getType();
     llvm::Type *rhsType = RHS->getType();
 
-    // If it's a pointer, load the value except for assignment do not load lhs
+    // If it's a pointer, load the value except for assignment, increase or decrease operations
     if (expr.op != TokenKind::Assign)
     {
         if (auto *allocaLHS = dyn_cast<AllocaInst>(LHS))
@@ -224,14 +225,18 @@ Value *IRGenerator::visit(UnaryExpr &expr)
     Value *Operand = expr.operand->accept(*this);
     llvm::Type *operandType = Operand->getType();
 
-    if (auto *allocaOp = dyn_cast<AllocaInst>(Operand))
+    // For increment and decrement operations, we need to handle the alloca
+    if (expr.op != TokenKind::PlusPlus && expr.op != TokenKind::MinusMinus)
     {
-        Operand = builder->CreateLoad(allocaOp->getAllocatedType(), allocaOp, "loadlhs");
-        operandType = Operand->getType(); // Update type after load
+        if (auto *allocaOp = dyn_cast<AllocaInst>(Operand))
+        {
+            Operand = builder->CreateLoad(allocaOp->getAllocatedType(), allocaOp, "loadlhs");
+            operandType = Operand->getType(); // Update type after load
+        }
     }
 
     std::unique_ptr<BinaryOp> binOp = BinaryOpBuilder::createBinaryOp(operandType);
-    llvm::Value *res = binOp->perform(Operand,nullptr,expr.op,*builder);
+    llvm::Value *res = binOp->perform(Operand, nullptr, expr.op, *builder);
     return res ? res : nullptr; // Return result or nullptr on failure
 }
 
@@ -511,7 +516,7 @@ llvm::Value *IRGenerator::visit(ForStmt &stmt)
     // Create a new basic block for the loop
     llvm::Function *F = builder->GetInsertBlock()->getParent();
     BasicBlock *loopBB = BasicBlock::Create(*context, "loop", F);
-    BasicBlock *innerBB = BasicBlock::Create(*context, "innerloop");
+    BasicBlock *innerBB = BasicBlock::Create(*context, "innerloop", F);
     BasicBlock *afterBB = BasicBlock::Create(*context, "afterloop");
 
     // Generate code for the initialization
@@ -536,6 +541,17 @@ llvm::Value *IRGenerator::visit(ForStmt &stmt)
 
     // Create conditional branch
     builder->CreateCondBr(condV, innerBB, afterBB);
+
+    loopBB = builder->GetInsertBlock();
+
+    // Create inner code
+    builder->SetInsertPoint(innerBB);
+    Value *body = stmt.Body->accept(*this);
+    if (!body)
+    {
+        return nullptr; // Body evaluation failed
+    }
+    innerBB = builder->GetInsertBlock();
 
     // Generate code for the step
     if (stmt.Step)

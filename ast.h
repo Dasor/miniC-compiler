@@ -29,6 +29,8 @@
 #include "llvm/Transforms/Scalar/Reassociate.h"
 #include "llvm/Transforms/Scalar/SimplifyCFG.h"
 
+// Other features that would be interesting to have: while, arrays, tensors, print
+
 namespace miniC
 {
 

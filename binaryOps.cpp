@@ -1,5 +1,7 @@
 #include "binaryOps.h"
 
+// Missing ops to implement: +=, -= 
+
 using namespace miniC;
 
 llvm::Value* BinaryOp::perform(llvm::Value* lhs, llvm::Value* rhs, miniC::TokenKind op, llvm::IRBuilder<>& builder){
@@ -319,5 +321,10 @@ llvm::Value* PtrBinaryOp::logicalNot(llvm::Value* operand, llvm::IRBuilder<>& bu
 }
 
 llvm::Value* PtrBinaryOp::increase(llvm::Value* operand, llvm::IRBuilder<>& builder) {
-    throw std::runtime_error("Unsupported operation for pointer types");
+    // load value, increase it, and store back
+    auto *allocaOp = llvm::dyn_cast<llvm::AllocaInst>(operand);
+    auto *loadedValue = builder.CreateLoad(allocaOp->getAllocatedType(), allocaOp, "loadptr");
+    auto *newValue = builder.CreateAdd(loadedValue, llvm::ConstantInt::get(allocaOp->getAllocatedType(), 1), "incrptr");
+    auto *storeIncr = builder.CreateStore(newValue, operand, "storeptr");
+    return storeIncr; // Return the new pointer value
 }
