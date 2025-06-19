@@ -29,7 +29,7 @@
 #include "llvm/Transforms/Scalar/Reassociate.h"
 #include "llvm/Transforms/Scalar/SimplifyCFG.h"
 
-// Other features that would be interesting to have: while, arrays, tensors, print
+// Other features that would be interesting to have: while, arrays, tensors, print, local variables
 
 namespace miniC
 {
@@ -124,11 +124,16 @@ namespace miniC
     {
     public:
         std::string name;
+        int arraySize = 0;
 
         // For reading a var
         explicit VarExpr(const std::string &name) : name(name) {}
         // For defining a var
         explicit VarExpr(const std::string &name, Type type) : Expr(type), name(name) {}
+        // For defining a var with array size
+        VarExpr(const std::string &name, Type type, int arraySize)
+            : Expr(type), name(name), arraySize(arraySize) {}
+        bool isArray() const { return arraySize != 0; }
 
         llvm::Value *accept(ASTVisitor &visitor) override;
         bool typeCheck() override;
@@ -166,6 +171,7 @@ namespace miniC
 
         DefStmt(VarExpr var, std::unique_ptr<Expr> initValue)
             : var(std::move(var)), initValue(std::move(initValue)) {}
+
 
         llvm::Value *accept(ASTVisitor &visitor) override;
     };

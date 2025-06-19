@@ -142,7 +142,16 @@ Value *IRGenerator::visit(DefStmt &stmt)
     }
 
     // Create alloca for the variable
-    AllocaInst *alloca = builder->CreateAlloca(varType, nullptr, stmt.var.name);
+    AllocaInst *alloca = nullptr;
+    if (stmt.var.isArray())
+    {
+        auto arrayType = llvm::ArrayType::get(varType, stmt.var.arraySize);
+        alloca = builder->CreateAlloca(arrayType, nullptr, stmt.var.name);
+    }
+    else
+    {
+        alloca = builder->CreateAlloca(varType, nullptr, stmt.var.name);
+    }
     namedValues[stmt.var.name] = alloca;
 
     // Initialize variable if it has a value

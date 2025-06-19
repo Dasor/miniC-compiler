@@ -154,6 +154,24 @@ std::unique_ptr<Stmt> Parser::parseDefinition()
     }
     std::string name = currentToken.lexeme;
     nextToken(); // Eat the variable name
+    
+    // check for array
+    int arraySize = 0;
+    if (match(TokenKind::LBracket))
+    {
+        nextToken(); // Eat '['
+        arraySize = currentToken.lexeme.empty() ? 0 : std::stoi(currentToken.lexeme);
+        if(currentToken.kind != TokenKind::IntegerLiteral)
+        {
+            throw std::runtime_error("Expected array size after '['");
+        }
+        nextToken(); // Eat the array size
+        if (!expect(TokenKind::RBracket))
+        {
+            throw std::runtime_error("Expected ']' after array size");
+        }
+    }
+
     std::unique_ptr<Expr> initValue = nullptr;
     if (match(TokenKind::Assign))
     {
@@ -164,8 +182,8 @@ std::unique_ptr<Stmt> Parser::parseDefinition()
             throw std::runtime_error("Expected expression after '='");
         }
     }
-    VarExpr var(name, tokenToType[type]);
-    return std::make_unique<DefStmt>(var, std::move(initValue));
+    VarExpr var(name, tokenToType[type], arraySize);
+    return std::make_unique<DefStmt>(std::move(var), std::move(initValue));
 }
 
 std::unique_ptr<Expr> Parser::parseLiteralExpr()
