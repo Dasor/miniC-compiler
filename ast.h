@@ -139,6 +139,19 @@ namespace miniC
         bool typeCheck() override;
     };
 
+    class ArrayAccessExpr : public Expr
+    {
+    public:
+        std::unique_ptr<VarExpr> array;
+        std::unique_ptr<Expr> index;
+
+        ArrayAccessExpr(std::unique_ptr<VarExpr> array, std::unique_ptr<Expr> index)
+            : array(std::move(array)), index(std::move(index)) {}
+
+        llvm::Value *accept(ASTVisitor &visitor) override;
+        bool typeCheck() override;
+    };
+
     class BlockStmt : public Stmt
     {
     public:
@@ -171,7 +184,6 @@ namespace miniC
 
         DefStmt(VarExpr var, std::unique_ptr<Expr> initValue)
             : var(std::move(var)), initValue(std::move(initValue)) {}
-
 
         llvm::Value *accept(ASTVisitor &visitor) override;
     };
@@ -217,8 +229,8 @@ namespace miniC
     class IfStmt : public Stmt
     {
     public:
-            std::unique_ptr<Expr> Cond;
-            std::unique_ptr<Stmt> Then, Else;
+        std::unique_ptr<Expr> Cond;
+        std::unique_ptr<Stmt> Then, Else;
 
         IfStmt(std::unique_ptr<Expr> cond, std::unique_ptr<Stmt> thenStmt, std::unique_ptr<Stmt> elseStmt)
             : Cond(std::move(cond)), Then(std::move(thenStmt)), Else(std::move(elseStmt)) {}
@@ -228,10 +240,10 @@ namespace miniC
 
     class ForStmt : public Stmt
     {
-        public:
-            std::unique_ptr<Stmt> Init; 
-            std::unique_ptr<Expr> Cond, Step;
-            std::unique_ptr<BlockStmt> Body;
+    public:
+        std::unique_ptr<Stmt> Init;
+        std::unique_ptr<Expr> Cond, Step;
+        std::unique_ptr<BlockStmt> Body;
 
         ForStmt(std::unique_ptr<Stmt> init, std::unique_ptr<Expr> cond, std::unique_ptr<Expr> step, std::unique_ptr<BlockStmt> body)
             : Init(std::move(init)), Cond(std::move(cond)), Step(std::move(step)), Body(std::move(body)) {}
@@ -249,6 +261,7 @@ namespace miniC
         virtual llvm::Value *visit(LiteralExpr &expr) = 0;
         virtual llvm::Value *visit(VarExpr &expr) = 0;
         virtual llvm::Value *visit(CallExpr &expr) = 0;
+        virtual llvm::Value *visit(ArrayAccessExpr &expr) = 0;
         virtual llvm::Function *visit(Prototype &proto) = 0;
         virtual llvm::Function *visit(miniC::Function &func) = 0;
         virtual llvm::Value *visit(BlockStmt &stmt) = 0;
@@ -284,6 +297,7 @@ namespace miniC
         llvm::Value *visit(LiteralExpr &expr) override;
         llvm::Value *visit(VarExpr &expr) override;
         llvm::Value *visit(CallExpr &expr) override;
+        llvm::Value *visit(ArrayAccessExpr &expr) override;
         llvm::Function *visit(Prototype &proto) override;
         llvm::Function *visit(miniC::Function &func) override;
         llvm::Value *visit(BlockStmt &stmt) override;

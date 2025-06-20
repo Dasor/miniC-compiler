@@ -116,13 +116,28 @@ std::unique_ptr<Expr> Parser::parseIdentifierExpr()
     std::string name = currentToken.lexeme;
     nextToken();
 
-    if (!match(TokenKind::LParen))
+    if (!match(TokenKind::LParen) && !match(TokenKind::LBracket))
     {
         // It's a variable, not a function call
         return std::make_unique<VarExpr>(name);
     }
-    nextToken(); // Eat the '('
 
+    if (match(TokenKind::LBracket))
+    {
+        // It's an array access
+        nextToken(); // Eat the '['
+        auto index = parseExpression();
+        if (!index)
+        {
+            throw std::runtime_error("Expected index expression in array access");
+        }
+        if (!expect(TokenKind::RBracket))
+        {
+            throw std::runtime_error("Expected ']' after array index");
+        }
+        return std::make_unique<ArrayAccessExpr>(std::make_unique<VarExpr>(name), std::move(index));
+    }
+    nextToken(); // Eat the '('
     std::vector<std::unique_ptr<Expr>> args;
     while (!match(TokenKind::RParen))
     {
@@ -154,14 +169,14 @@ std::unique_ptr<Stmt> Parser::parseDefinition()
     }
     std::string name = currentToken.lexeme;
     nextToken(); // Eat the variable name
-    
+
     // check for array
     int arraySize = 0;
     if (match(TokenKind::LBracket))
     {
         nextToken(); // Eat '['
         arraySize = currentToken.lexeme.empty() ? 0 : std::stoi(currentToken.lexeme);
-        if(currentToken.kind != TokenKind::IntegerLiteral)
+        if (currentToken.kind != TokenKind::IntegerLiteral)
         {
             throw std::runtime_error("Expected array size after '['");
         }
@@ -213,11 +228,13 @@ std::unique_ptr<Expr> Parser::parseExpression()
 
     auto lhs = parsePrimary();
     // check if the expression is unary
-    if(currentToken.kind == TokenKind::PlusPlus || currentToken.kind == TokenKind::MinusMinus){
-       auto expr = std::make_unique<UnaryExpr>(currentToken.kind, std::move(lhs));
-       // eat Unary op
-       nextToken();
-       return expr;
+    if (currentToken.kind == TokenKind::PlusPlus || currentToken.kind == TokenKind::MinusMinus)
+    {
+        auto expr = std::make_unique<UnaryExpr>(currentToken.kind, std::move(lhs));
+        // eat Unary op
+        nextToken();
+        return expr;
+        // check if lhs is an array and we are indexing
     }
     auto expr = parseBinOpRHS(0, std::move(lhs));
     return expr;
@@ -240,7 +257,8 @@ std::unique_ptr<Stmt> Parser::parseStatement()
         }
         return ifStmt;
     }
-    else if(currentToken.kind == TokenKind::Kw_For){
+    else if (currentToken.kind == TokenKind::Kw_For)
+    {
         auto forStmt = parseForStmt();
         if (!forStmt)
         {
@@ -464,7 +482,8 @@ std::unique_ptr<IfStmt> Parser::parseIfStmt()
     return std::make_unique<IfStmt>(std::move(cond), std::move(thenStmt), std::move(elseStmt));
 }
 
-std::unique_ptr<ForStmt> Parser::parseForStmt(){
+std::unique_ptr<ForStmt> Parser::parseForStmt()
+{
     // eat for
     nextToken();
 

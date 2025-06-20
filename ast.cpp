@@ -97,6 +97,11 @@ Value *UnaryExpr::accept(ASTVisitor &visitor)
 {
     return visitor.visit(*this);
 }
+
+Value *ArrayAccessExpr::accept(ASTVisitor &visitor)
+{
+    return visitor.visit(*this);
+}
 // Visitor method implementations
 
 Value *IRGenerator::visit(LiteralExpr &expr)
@@ -578,6 +583,38 @@ llvm::Value *IRGenerator::visit(ForStmt &stmt)
     return condV; // No value to return from a for statement
 }
 
+Value* IRGenerator::visit(ArrayAccessExpr &expr)
+{
+    Value *arrayV = expr.array->accept(*this);
+    Value *indexV = expr.index->accept(*this);
+
+    if (!arrayV || !indexV)
+        return nullptr;
+
+    if (indexV->getType()->isFloatingPointTy())
+    {
+        indexV = builder->CreateFPToSI(indexV, llvm::Type::getInt32Ty(*context), "convindex");
+    }
+
+    llvm::Type *ptrType = arrayV->getType();
+    if (!ptrType->isPointerTy())
+        return nullptr;
+
+    // Get the element type of the array
+    auto *ptrTy = llvm::cast<llvm::PointerType>(ptrType);
+    llvm::Type *elemType = ptrTy->getNonOpaquePointerElementType();
+    if (!elemType->isArrayTy())
+        return nullptr;
+
+    auto *arrayType = llvm::cast<llvm::ArrayType>(elemType);
+
+    llvm::Value *zero = llvm::ConstantInt::get(llvm::Type::getInt32Ty(*context), 0);
+    llvm::Value *elementPtr = builder->CreateGEP(arrayType, arrayV, {zero, indexV}, "arrayelem");
+
+    return elementPtr;
+}
+
+
 bool VarExpr::typeCheck()
 {
     return true;
@@ -633,6 +670,11 @@ bool BinaryExpr::typeCheck()
 }
 
 bool UnaryExpr::typeCheck()
+{
+    return true;
+}
+
+bool ArrayAccessExpr::typeCheck()
 {
     return true;
 }
