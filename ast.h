@@ -251,6 +251,17 @@ namespace miniC
         llvm::Value *accept(ASTVisitor &visitor) override;
     };
 
+    class RetStmt : public Stmt
+    {
+    public:
+        std::unique_ptr<Expr> returnValue;
+
+        explicit RetStmt(std::unique_ptr<Expr> returnValue)
+            : returnValue(std::move(returnValue)) {}
+
+        llvm::Value *accept(ASTVisitor &visitor) override;
+    };
+
     class ASTVisitor
     {
 
@@ -269,6 +280,7 @@ namespace miniC
         virtual llvm::Value *visit(DefStmt &stmt) = 0;
         virtual llvm::Value *visit(IfStmt &stmt) = 0;
         virtual llvm::Value *visit(ForStmt &stmt) = 0;
+        virtual llvm::Value *visit(RetStmt &stmt) = 0;
     };
 
     class IRGenerator : public ASTVisitor
@@ -279,8 +291,11 @@ namespace miniC
         std::unique_ptr<llvm::Module> module;
         std::unique_ptr<llvm::IRBuilder<>> builder;
         std::map<std::string, llvm::Value *> namedValues;
+        std::map<std::string, llvm::Type *> namedTypes;
         // Maps miniC types to their corresponding LLVM type constructors
         std::map<miniC::Type, llvm::Type *> typeMap;
+        // Current function's return type during code generation
+        llvm::Type currentFunctionReturnType;
         // for llvm opt
         // Create new pass and analysis managers.
         std::unique_ptr<llvm::FunctionPassManager> TheFPM;
@@ -305,6 +320,7 @@ namespace miniC
         llvm::Value *visit(DefStmt &stmt) override;
         llvm::Value *visit(IfStmt &stmt) override;
         llvm::Value *visit(ForStmt &stmt) override;
+        llvm::Value *visit(RetStmt &stmt) override;
 
         // Additional methods for IR generation
         void generateIR(const std::vector<std::unique_ptr<ASTNode>> &astNodes);

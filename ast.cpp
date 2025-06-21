@@ -10,6 +10,8 @@ IRGenerator::IRGenerator()
     builder = std::make_unique<llvm::IRBuilder<>>(*context);
 
     namedValues = {};
+    namedTypes = {};
+    currentFunctionReturnType = nullptr;
 
     typeMap = {
         {miniC::Type::Int, llvm::Type::getInt32Ty(*context)},
@@ -102,6 +104,11 @@ Value *ArrayAccessExpr::accept(ASTVisitor &visitor)
 {
     return visitor.visit(*this);
 }
+
+Value *RetStmt::accept(ASTVisitor &visitor)
+{
+    return visitor.visit(*this);
+}
 // Visitor method implementations
 
 Value *IRGenerator::visit(LiteralExpr &expr)
@@ -129,7 +136,8 @@ Value *IRGenerator::visit(LiteralExpr &expr)
 Value *IRGenerator::visit(VarExpr &expr)
 {
     Value *V = namedValues[expr.name];
-    if (!V)
+    llvm::Type *varType = namedTypes[expr.name];
+    if (!V || !varType)
     {
         // Variable not found
         return nullptr;
@@ -152,10 +160,12 @@ Value *IRGenerator::visit(DefStmt &stmt)
     {
         auto arrayType = llvm::ArrayType::get(varType, stmt.var.arraySize);
         alloca = builder->CreateAlloca(arrayType, nullptr, stmt.var.name);
+        namedTypes[stmt.var.name] = arrayType;
     }
     else
     {
         alloca = builder->CreateAlloca(varType, nullptr, stmt.var.name);
+        namedTypes[stmt.var.name] = varType;
     }
     namedValues[stmt.var.name] = alloca;
 
@@ -365,44 +375,8 @@ llvm::Function *IRGenerator::visit(Function &func)
     }
 
     // Generate function body
-    if (Value *RetVal = func.body->accept(*this))
+    if (func.body->accept(*this))
     {
-        // Create return
-        // if it's a pointer use the load instruction and return the value
-        if (auto *allocaRetVal = dyn_cast<AllocaInst>(RetVal))
-        {
-            RetVal = builder->CreateLoad(allocaRetVal->getAllocatedType(), allocaRetVal, "loadret");
-        }
-        // Check for type mistmatch
-        if (typeMap.at(func.proto->returnType) != RetVal->getType())
-        {
-            if (func.proto->returnType == Type::Void)
-            {
-                builder->CreateRetVoid();
-            }
-            else if (typeMap.at(func.proto->returnType) == llvm::Type::getFloatTy(*context) && RetVal->getType()->isIntegerTy())
-            {
-                // Convert integer to float if needed
-                RetVal = builder->CreateSIToFP(RetVal, llvm::Type::getFloatTy(*context), "convfloat");
-                builder->CreateRet(RetVal);
-            }
-            else if (typeMap.at(func.proto->returnType) == llvm::Type::getInt32Ty(*context) && RetVal->getType()->isFloatingPointTy())
-            {
-                // Convert float to integer if needed
-                RetVal = builder->CreateFPToSI(RetVal, llvm::Type::getInt32Ty(*context), "convint");
-                builder->CreateRet(RetVal);
-            }
-            else
-            {
-                throw std::runtime_error("Return type mismatch in function " + func.proto->name);
-            }
-        }
-        else
-        {
-
-            builder->CreateRet(RetVal);
-        }
-
         // Verify function
         if (verifyFunction(*F, &llvm::errs()))
         {
@@ -422,7 +396,6 @@ llvm::Function *IRGenerator::visit(Function &func)
 
 llvm::Function *IRGenerator::visit(Prototype &proto)
 {
-    // Default implementation does nothing
     std::vector<llvm::Type *> argTypes;
     for (auto &arg : proto.params)
     {
@@ -435,6 +408,7 @@ llvm::Function *IRGenerator::visit(Prototype &proto)
     }
 
     llvm::Type *returnType = typeMap.at(proto.returnType);
+    currentFunctionReturnType = typeMap.at(proto.returnType);
     if (!returnType)
     {
         return nullptr; // Handle unknown return type
@@ -583,7 +557,7 @@ llvm::Value *IRGenerator::visit(ForStmt &stmt)
     return condV; // No value to return from a for statement
 }
 
-Value* IRGenerator::visit(ArrayAccessExpr &expr)
+Value *IRGenerator::visit(ArrayAccessExpr &expr)
 {
     Value *arrayV = expr.array->accept(*this);
     Value *indexV = expr.index->accept(*this);
@@ -601,12 +575,8 @@ Value* IRGenerator::visit(ArrayAccessExpr &expr)
         return nullptr;
 
     // Get the element type of the array
-    auto *ptrTy = llvm::cast<llvm::PointerType>(ptrType);
-    llvm::Type *elemType = ptrTy->getNonOpaquePointerElementType();
-    if (!elemType->isArrayTy())
-        return nullptr;
 
-    auto *arrayType = llvm::cast<llvm::ArrayType>(elemType);
+    auto *arrayType = namedTypes[expr.array->name];
 
     llvm::Value *zero = llvm::ConstantInt::get(llvm::Type::getInt32Ty(*context), 0);
     llvm::Value *elementPtr = builder->CreateGEP(arrayType, arrayV, {zero, indexV}, "arrayelem");
@@ -614,6 +584,60 @@ Value* IRGenerator::visit(ArrayAccessExpr &expr)
     return elementPtr;
 }
 
+Value *IRGenerator::visit(RetStmt &stmt)
+{
+    if (!currentFunctionReturnType)
+    {
+        return nullptr; // No current function context
+    }
+
+    if (stmt.returnValue)
+    {
+        // Non-void return
+        Value *retVal = stmt.returnValue->accept(*this);
+        if (!retVal)
+        {
+            return nullptr; // Return value evaluation failed
+        }
+
+        // Handle type conversion if needed
+        if (currentFunctionReturnType->isVoidTy())
+        {
+            // Error: returning value from void function
+            return nullptr;
+        }
+
+        if (retVal->getType() != currentFunctionReturnType)
+        {
+            // Attempt type conversion
+            if (retVal->getType()->isIntegerTy() && currentFunctionReturnType->isFloatingPointTy())
+            {
+                retVal = builder->CreateSIToFP(retVal, currentFunctionReturnType, "convret");
+            }
+            else if (retVal->getType()->isFloatingPointTy() && currentFunctionReturnType->isIntegerTy())
+            {
+                retVal = builder->CreateFPToSI(retVal, currentFunctionReturnType, "convret");
+            }
+            else
+            {
+                // Incompatible types
+                return nullptr;
+            }
+        }
+
+        return builder->CreateRet(retVal);
+    }
+    else
+    {
+        // Void return
+        if (!currentFunctionReturnType->isVoidTy())
+        {
+            // Error: missing return value in non-void function
+            return nullptr;
+        }
+        return builder->CreateRetVoid();
+    }
+}
 
 bool VarExpr::typeCheck()
 {

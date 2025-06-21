@@ -266,6 +266,19 @@ std::unique_ptr<Stmt> Parser::parseStatement()
         }
         return forStmt;
     }
+    else if (currentToken.kind == TokenKind::Kw_Return)
+    {
+        auto retStmt = parseRetStmt();
+        if (!retStmt)
+        {
+            throw std::runtime_error("Failed to parse 'return' statement");
+        }
+        return retStmt;
+    }
+    else if (currentToken.kind == TokenKind::LBrace)
+    {
+        return parseBlock();
+    }
     else
     {
         auto expr = parseExpression();
@@ -530,6 +543,22 @@ std::unique_ptr<ForStmt> Parser::parseForStmt()
     }
 
     return std::make_unique<ForStmt>(std::move(init), std::move(cond), std::move(step), std::move(body));
+}
+
+std::unique_ptr<RetStmt> Parser::parseRetStmt()
+{
+    nextToken(); // Eat 'return'
+    std::unique_ptr<Expr> returnValue;
+    if (currentToken.kind != TokenKind::Semicolon)
+    {
+        returnValue = parseExpression();
+        if (!returnValue)
+        {
+            throw std::runtime_error("Expected expression after 'return'");
+        }
+    }
+    EXPECT_SEMICOLON();
+    return std::make_unique<RetStmt>(std::move(returnValue));
 }
 
 void Parser::MainLoop()
