@@ -11,7 +11,6 @@ IRGenerator::IRGenerator()
 
     namedValues = {};
     namedTypes = {};
-    currentFunctionReturnType = nullptr;
 
     typeMap = {
         {miniC::Type::Int, llvm::Type::getInt32Ty(*context)},
@@ -205,12 +204,22 @@ Value *IRGenerator::visit(BinaryExpr &expr)
         {
             LHS = builder->CreateLoad(allocaLHS->getAllocatedType(), allocaLHS, "loadlhs");
             lhsType = LHS->getType(); // Update type after load
-        }
+        }else if (auto *gepLHS = dyn_cast<GEPOperator>(LHS))
+        {
+            // If it's a GEP, we need to load the value it points to
+            LHS = builder->CreateLoad(gepLHS->getSourceElementType()->getArrayElementType(), LHS, "loadlhs");
+            lhsType = LHS->getType(); // Update type after load
     }
     if (auto *allocaRHS = dyn_cast<AllocaInst>(RHS))
     {
         RHS = builder->CreateLoad(allocaRHS->getAllocatedType(), allocaRHS, "loadrhs");
         rhsType = RHS->getType(); // Update type after load
+    }else if (auto *gepRHS = dyn_cast<GEPOperator>(RHS))
+        {
+            // If it's a GEP, we need to load the value it points to
+            RHS = builder->CreateLoad(gepRHS->getSourceElementType()->getArrayElementType(), RHS, "loadrhs");
+            rhsType = RHS->getType(); // Update type after load
+        }
     }
 
     // Type checking and conversion
@@ -351,10 +360,11 @@ llvm::Function *IRGenerator::visit(Function &func)
     BasicBlock *BB = BasicBlock::Create(*context, "entry", F);
     builder->SetInsertPoint(BB);
 
-    // Add arguments to symbol table
+    // Add arguments and type to symbol table
     for (auto &Arg : F->args())
     {
         namedValues[std::string(Arg.getName())] = &Arg;
+        namedTypes[std::string(Arg.getName())] = Arg.getType();
     }
 
     // Check if the function has a body
@@ -377,6 +387,9 @@ llvm::Function *IRGenerator::visit(Function &func)
     // Generate function body
     if (func.body->accept(*this))
     {
+        if(F->getReturnType()->isVoidTy()){
+            builder->CreateRetVoid();
+        }
         // Verify function
         if (verifyFunction(*F, &llvm::errs()))
         {
@@ -408,7 +421,6 @@ llvm::Function *IRGenerator::visit(Prototype &proto)
     }
 
     llvm::Type *returnType = typeMap.at(proto.returnType);
-    currentFunctionReturnType = typeMap.at(proto.returnType);
     if (!returnType)
     {
         return nullptr; // Handle unknown return type
@@ -565,6 +577,18 @@ Value *IRGenerator::visit(ArrayAccessExpr &expr)
     if (!arrayV || !indexV)
         return nullptr;
 
+    // if index is a pointer load
+    if (auto *allocaIndex = dyn_cast<AllocaInst>(indexV))
+    {
+        indexV = builder->CreateLoad(allocaIndex->getAllocatedType(), allocaIndex, "loadindex");
+    }
+    else if (auto *gepIndex = dyn_cast<GEPOperator>(indexV))
+    {
+        // If it's a GEP, we need to load the value it points to
+        indexV = builder->CreateLoad(gepIndex->getSourceElementType()->getArrayElementType(), indexV, "loadindex");
+    }
+
+
     if (indexV->getType()->isFloatingPointTy())
     {
         indexV = builder->CreateFPToSI(indexV, llvm::Type::getInt32Ty(*context), "convindex");
@@ -586,10 +610,14 @@ Value *IRGenerator::visit(ArrayAccessExpr &expr)
 
 Value *IRGenerator::visit(RetStmt &stmt)
 {
-    if (!currentFunctionReturnType)
+
+    // get current fucntion return type
+    llvm::Function *currentFunction = builder->GetInsertBlock()->getParent();
+    if (!currentFunction)
     {
-        return nullptr; // No current function context
+        return nullptr; // No current function
     }
+    auto currentFunctionReturnType = currentFunction->getReturnType();
 
     if (stmt.returnValue)
     {
@@ -600,13 +628,20 @@ Value *IRGenerator::visit(RetStmt &stmt)
             return nullptr; // Return value evaluation failed
         }
 
-        // Handle type conversion if needed
-        if (currentFunctionReturnType->isVoidTy())
+        if(retVal->getType()->isPointerTy())
         {
-            // Error: returning value from void function
-            return nullptr;
+            // If the return value is a pointer, we need to load it
+            if (auto *allocaRetVal = dyn_cast<AllocaInst>(retVal))
+            {
+                retVal = builder->CreateLoad(allocaRetVal->getAllocatedType(), allocaRetVal, "loadret");
+            }else if (auto *gepRetVal = dyn_cast<GEPOperator>(retVal))
+            {
+                // If it's a GEP, we need to load the value it points to
+                retVal = builder->CreateLoad(gepRetVal->getSourceElementType()->getArrayElementType(), retVal, "loadret");
+            }
         }
 
+        // Handle type conversion if needed
         if (retVal->getType() != currentFunctionReturnType)
         {
             // Attempt type conversion

@@ -7,5 +7,6 @@ int main(){
 	int a = 5; // this is a variable declaration
 	int b = 10; // another variable declaration
 	int sum = a+b;
+	return sum; // return the sum of a and b
 }
 

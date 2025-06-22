@@ -294,8 +294,6 @@ namespace miniC
         std::map<std::string, llvm::Type *> namedTypes;
         // Maps miniC types to their corresponding LLVM type constructors
         std::map<miniC::Type, llvm::Type *> typeMap;
-        // Current function's return type during code generation
-        llvm::Type currentFunctionReturnType;
         // for llvm opt
         // Create new pass and analysis managers.
         std::unique_ptr<llvm::FunctionPassManager> TheFPM;
