@@ -204,17 +204,19 @@ Value *IRGenerator::visit(BinaryExpr &expr)
         {
             LHS = builder->CreateLoad(allocaLHS->getAllocatedType(), allocaLHS, "loadlhs");
             lhsType = LHS->getType(); // Update type after load
-        }else if (auto *gepLHS = dyn_cast<GEPOperator>(LHS))
+        }
+        else if (auto *gepLHS = dyn_cast<GEPOperator>(LHS))
         {
             // If it's a GEP, we need to load the value it points to
             LHS = builder->CreateLoad(gepLHS->getSourceElementType()->getArrayElementType(), LHS, "loadlhs");
             lhsType = LHS->getType(); // Update type after load
-    }
-    if (auto *allocaRHS = dyn_cast<AllocaInst>(RHS))
-    {
-        RHS = builder->CreateLoad(allocaRHS->getAllocatedType(), allocaRHS, "loadrhs");
-        rhsType = RHS->getType(); // Update type after load
-    }else if (auto *gepRHS = dyn_cast<GEPOperator>(RHS))
+        }
+        if (auto *allocaRHS = dyn_cast<AllocaInst>(RHS))
+        {
+            RHS = builder->CreateLoad(allocaRHS->getAllocatedType(), allocaRHS, "loadrhs");
+            rhsType = RHS->getType(); // Update type after load
+        }
+        else if (auto *gepRHS = dyn_cast<GEPOperator>(RHS))
         {
             // If it's a GEP, we need to load the value it points to
             RHS = builder->CreateLoad(gepRHS->getSourceElementType()->getArrayElementType(), RHS, "loadrhs");
@@ -282,6 +284,9 @@ Value *IRGenerator::visit(BlockStmt &stmt)
         if (!lastValue)
         {
             return nullptr; // Statement failed
+        }else if(dynamic_cast<RetStmt*>(stmtPtr.get())) // Check if the statement is a return statement
+        {
+            return lastValue; // If we hit a return statement, we can exit early
         }
     }
     return lastValue; // Return value of last statement
@@ -385,11 +390,46 @@ llvm::Function *IRGenerator::visit(Function &func)
     }
 
     // Generate function body
+
     if (func.body->accept(*this))
     {
-        if(F->getReturnType()->isVoidTy()){
-            builder->CreateRetVoid();
+
+        llvm::BasicBlock *currBB = builder->GetInsertBlock();
+        if (!currBB->getTerminator())
+        {
+            if (func.proto->returnType == Type::Void)
+            {
+                builder->CreateRetVoid();
+            }
+            else
+            {
+                // Emit default return value (e.g., 0 for int, null for pointers, etc.)
+                llvm::Type *retTy = F->getReturnType();
+                llvm::Value *defaultRet;
+
+                if (retTy->isIntegerTy())
+                {
+                    defaultRet = llvm::ConstantInt::get(retTy, 0);
+                }
+                else if (retTy->isFloatingPointTy())
+                {
+                    defaultRet = llvm::ConstantFP::get(retTy, 0.0);
+                }
+                else if (retTy->isPointerTy())
+                {
+                    defaultRet = llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(retTy));
+                }
+                else
+                {
+                    // Unsupported return type
+                    F->eraseFromParent();
+                    return nullptr;
+                }
+
+                builder->CreateRet(defaultRet);
+            }
         }
+
         // Verify function
         if (verifyFunction(*F, &llvm::errs()))
         {
@@ -481,10 +521,9 @@ llvm::Value *IRGenerator::visit(IfStmt &stmt)
         return nullptr; // Then branch evaluation failed
     }
     // Needed so every branch ends with a return or a jump
-    builder->CreateBr(mergeBB); // Jump to merge block
-
-    // Set insert point to else block
     thenBB = builder->GetInsertBlock();
+    if (!thenBB->getTerminator())
+        builder->CreateBr(mergeBB); // Jump to merge block
 
     Value *elseV = nullptr;
     F->insert(F->end(), elseBB);
@@ -499,15 +538,15 @@ llvm::Value *IRGenerator::visit(IfStmt &stmt)
         }
     }
 
-    builder->CreateBr(mergeBB); // Jump to merge block
     elseBB = builder->GetInsertBlock();
+    if (!elseBB->getTerminator())
+        builder->CreateBr(mergeBB); // Jump to merge block
 
     // Set insert point to merge block
     F->insert(F->end(), mergeBB);
     builder->SetInsertPoint(mergeBB);
 
     // No phi node needed since we aren't using SSA but rather alloca, can return anything (doesn't matter)
-
     return condV;
 }
 
@@ -588,7 +627,6 @@ Value *IRGenerator::visit(ArrayAccessExpr &expr)
         indexV = builder->CreateLoad(gepIndex->getSourceElementType()->getArrayElementType(), indexV, "loadindex");
     }
 
-
     if (indexV->getType()->isFloatingPointTy())
     {
         indexV = builder->CreateFPToSI(indexV, llvm::Type::getInt32Ty(*context), "convindex");
@@ -628,13 +666,14 @@ Value *IRGenerator::visit(RetStmt &stmt)
             return nullptr; // Return value evaluation failed
         }
 
-        if(retVal->getType()->isPointerTy())
+        if (retVal->getType()->isPointerTy())
         {
             // If the return value is a pointer, we need to load it
             if (auto *allocaRetVal = dyn_cast<AllocaInst>(retVal))
             {
                 retVal = builder->CreateLoad(allocaRetVal->getAllocatedType(), allocaRetVal, "loadret");
-            }else if (auto *gepRetVal = dyn_cast<GEPOperator>(retVal))
+            }
+            else if (auto *gepRetVal = dyn_cast<GEPOperator>(retVal))
             {
                 // If it's a GEP, we need to load the value it points to
                 retVal = builder->CreateLoad(gepRetVal->getSourceElementType()->getArrayElementType(), retVal, "loadret");
