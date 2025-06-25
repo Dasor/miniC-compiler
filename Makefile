@@ -1,6 +1,6 @@
 # Compiler and flags
 CXX := g++
-CXXFLAGS := -std=c++17 -Wall -Wno-unused-parameter -Wno-switch -Wextra -g -lLLVM
+CXXFLAGS := -std=c++17 -Wall -Wno-unused-parameter -fsanitize=address -Wno-switch -Wextra -g -lLLVM
 
 # Output binary name
 TARGET := comp

@@ -9,16 +9,31 @@ IRGenerator::IRGenerator()
     module = std::make_unique<llvm::Module>("miniC", *context);
     builder = std::make_unique<llvm::IRBuilder<>>(*context);
 
+    // Create type variables for cleaner code
+    llvm::Type *Int32Ty = llvm::Type::getInt32Ty(*context);
+    llvm::Type *FloatTy = llvm::Type::getFloatTy(*context);
+    llvm::Type *Int8Ty = llvm::Type::getInt8Ty(*context);
+    llvm::Type *VoidTy = llvm::Type::getVoidTy(*context);
+    llvm::Type *Int8PtrTy = llvm::PointerType::get(Int8Ty, 0);
+    llvm::Type *StringTy = llvm::ArrayType::get(Int8Ty, 0);
+
     namedValues = {};
     namedTypes = {};
 
     typeMap = {
-        {miniC::Type::Int, llvm::Type::getInt32Ty(*context)},
-        {miniC::Type::Float, llvm::Type::getFloatTy(*context)},
-        {miniC::Type::Char, llvm::Type::getInt8Ty(*context)},
-        {miniC::Type::String, llvm::ArrayType::get(llvm::Type::getInt8Ty(*context), 0)},
-        {miniC::Type::Void, llvm::Type::getVoidTy(*context)},
+        {miniC::Type::Int, Int32Ty},
+        {miniC::Type::Float, FloatTy},
+        {miniC::Type::Char, Int8Ty},
+        {miniC::Type::String, StringTy},
+        {miniC::Type::Void, VoidTy},
         {miniC::Type::Unknown, nullptr}};
+
+    auto *PrintfFT = llvm::FunctionType::get(
+        /*ReturnTy=*/Int32Ty,
+        /*Params=*/{Int8PtrTy},
+        /*isVarArg=*/true);
+
+    LibCRegistry["printf"] = PrintfFT;
 
     TheFPM = std::make_unique<llvm::FunctionPassManager>();
     TheLAM = std::make_unique<llvm::LoopAnalysisManager>();
@@ -284,7 +299,8 @@ Value *IRGenerator::visit(BlockStmt &stmt)
         if (!lastValue)
         {
             return nullptr; // Statement failed
-        }else if(dynamic_cast<RetStmt*>(stmtPtr.get())) // Check if the statement is a return statement
+        }
+        else if (dynamic_cast<RetStmt *>(stmtPtr.get())) // Check if the statement is a return statement
         {
             return lastValue; // If we hit a return statement, we can exit early
         }
@@ -297,18 +313,41 @@ Value *IRGenerator::visit(ExprStmt &stmt)
     return stmt.expr->accept(*this); // Just evaluate the expression
 }
 
+llvm::Function *IRGenerator::emitLibCFunctionIfNeeded(const std::string &name)
+{
+    // Check if the function is already defined
+    if (module->getFunction(name))
+        return nullptr;
+
+    // try to get function for registry
+    llvm::FunctionType *libcFuncType = LibCRegistry.at(name);
+    // Create function
+    llvm::Function *libcFunc = llvm::Function::Create(
+        libcFuncType, llvm::Function::ExternalLinkage, name, module.get());
+
+    return libcFunc; // Return the created function
+}
+
 Value *IRGenerator::visit(CallExpr &expr)
 {
     // Get function from module
     llvm::Function *calleeF = module->getFunction(expr.callee);
     if (!calleeF)
     {
-        return nullptr; // Function not found
+        // might be a libc function, try to find it in the symbol table
+        calleeF = emitLibCFunctionIfNeeded(expr.callee);
+        if (!calleeF)
+        {
+            fprintf(stderr, "Error: Function '%s' not found.\n", expr.callee.c_str());
+            return nullptr; // Function not found
+        }
     }
 
     // Check argument count matches
     if (calleeF->arg_size() != expr.args.size())
     {
+        fprintf(stderr, "Error: Function '%s' expects %zu arguments but got %zu.\n",
+                expr.callee.c_str(), calleeF->arg_size(), expr.args.size());
         return nullptr; // Argument count mismatch
     }
 
@@ -318,7 +357,10 @@ Value *IRGenerator::visit(CallExpr &expr)
     {
         Value *argV = expr.args[i]->accept(*this);
         if (!argV)
+        {
+            fprintf(stderr, "Error: Argument %u for function '%s' is invalid.\n", i, expr.callee.c_str());
             return nullptr;
+        }
 
         // Get expected and actual types
         llvm::Type *expectedTy = calleeF->getFunctionType()->getParamType(i);
@@ -344,6 +386,8 @@ Value *IRGenerator::visit(CallExpr &expr)
             }
             else
             {
+                fprintf(stderr, "Error: Argument %u for function '%s' has incompatible type: expected %s but got %s.\n",
+                        i, expr.callee.c_str(), expectedTy->getStructName().str().c_str(), actualTy->getStructName().str().c_str());
                 return nullptr; // Incompatible types
             }
         }

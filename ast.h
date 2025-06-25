@@ -302,6 +302,8 @@ namespace miniC
         std::unique_ptr<llvm::CGSCCAnalysisManager> TheCGAM;
         std::unique_ptr<llvm::ModuleAnalysisManager> TheMAM;
         std::unique_ptr<llvm::PassInstrumentationCallbacks> ThePIC;
+        // for libc
+        std::map<std::string, llvm::FunctionType*> LibCRegistry;
 
     public:
         IRGenerator();
@@ -319,6 +321,7 @@ namespace miniC
         llvm::Value *visit(IfStmt &stmt) override;
         llvm::Value *visit(ForStmt &stmt) override;
         llvm::Value *visit(RetStmt &stmt) override;
+        llvm::Function *emitLibCFunctionIfNeeded(const std::string &name);
 
         // Additional methods for IR generation
         void generateIR(const std::vector<std::unique_ptr<ASTNode>> &astNodes);
