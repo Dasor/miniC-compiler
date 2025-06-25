@@ -138,12 +138,23 @@ Value *IRGenerator::visit(LiteralExpr &expr)
     case TokenKind::CharacterLiteral:
         expr.setType(Type::Char);
         return ConstantInt::get(llvm::Type::getInt8Ty(*context), expr.value[1]);
-    case TokenKind::StringLiteral:
+    case TokenKind::StringLiteral: {
+        // create a global string constant and return a pointer to it
         expr.setType(Type::String);
-        return ConstantDataArray::getString(*context, expr.value, true);
+        Constant *strConst = ConstantDataArray::getString(*context, expr.value, true);
+        GlobalVariable *strVar = new GlobalVariable(
+            *module, strConst->getType(), true, llvm::GlobalValue::PrivateLinkage,
+            strConst, ".str." + expr.value);
+        // Create a pointer to the string constant
+        Value *strPtr = builder->CreateConstGEP2_32(
+            strVar->getValueType(), strVar, 0, 0, "strptr");
+        // Return the pointer to the string constant
+        return strPtr;
+    }
     default:
         expr.setType(Type::Unknown);
         return nullptr;
+        break; // Ensure proper termination of the default case
     }
 }
 
@@ -374,7 +385,7 @@ Value *IRGenerator::visit(CallExpr &expr)
         }
 
         // Handle type conversions
-        if (actualTy != expectedTy)
+        if (actualTy != expectedTy && !actualTy->isArrayTy())
         {
             if (actualTy->isIntegerTy() && expectedTy->isFloatingPointTy())
             {
