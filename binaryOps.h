@@ -6,25 +6,27 @@
 #include <llvm/IR/Type.h>
 
 #define OVERRIDE_BINARY_OPS \
-    llvm::Value* add(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>& builder) override; \
-    llvm::Value* sub(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>& builder) override; \
-    llvm::Value* mul(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>& builder) override; \
-    llvm::Value* div(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>& builder) override; \
-    llvm::Value* mod(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>& builder) override; \
-    llvm::Value* assign(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>& builder) override; \
-    llvm::Value* bitwiseAnd(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>& builder) override; \
-    llvm::Value* bitwiseOr(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>& builder) override; \
-    llvm::Value* bitwiseXor(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>& builder) override; \
-    llvm::Value* lessThan(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>& builder) override; \
-    llvm::Value* lessThanEqual(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>& builder) override; \
-    llvm::Value* greaterThan(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>& builder) override; \
-    llvm::Value* greaterThanEqual(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>& builder) override; \
-    llvm::Value* equal(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>& builder) override; \
-    llvm::Value* notEqual(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>& builder) override; \
-    llvm::Value* logicalAnd(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>& builder) override; \
-    llvm::Value* logicalOr(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>& builder) override; \
-    llvm::Value* logicalNot(llvm::Value* operand, llvm::IRBuilder<>& builder) override; \
-    llvm::Value* increase(llvm::Value* operand, llvm::IRBuilder<>& builder) override;
+    llvm::Value* add(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<llvm::ConstantFolder, llvm::IRBuilderDefaultInserter>& builder) override; \
+    llvm::Value* sub(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<llvm::ConstantFolder, llvm::IRBuilderDefaultInserter>& builder) override; \
+    llvm::Value* mul(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<llvm::ConstantFolder, llvm::IRBuilderDefaultInserter>& builder) override; \
+    llvm::Value* div(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<llvm::ConstantFolder, llvm::IRBuilderDefaultInserter>& builder) override; \
+    llvm::Value* mod(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<llvm::ConstantFolder, llvm::IRBuilderDefaultInserter>& builder) override; \
+    llvm::Value* assign(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<llvm::ConstantFolder, llvm::IRBuilderDefaultInserter>& builder) override; \
+    llvm::Value* bitwiseAnd(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<llvm::ConstantFolder, llvm::IRBuilderDefaultInserter>& builder) override; \
+    llvm::Value* bitwiseOr(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<llvm::ConstantFolder, llvm::IRBuilderDefaultInserter>& builder) override; \
+    llvm::Value* bitwiseXor(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<llvm::ConstantFolder, llvm::IRBuilderDefaultInserter>& builder) override; \
+    llvm::Value* lessThan(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<llvm::ConstantFolder, llvm::IRBuilderDefaultInserter>& builder) override; \
+    llvm::Value* lessThanEqual(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<llvm::ConstantFolder, llvm::IRBuilderDefaultInserter>& builder) override; \
+    llvm::Value* greaterThan(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<llvm::ConstantFolder, llvm::IRBuilderDefaultInserter>& builder) override; \
+    llvm::Value* greaterThanEqual(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<llvm::ConstantFolder, llvm::IRBuilderDefaultInserter>& builder) override; \
+    llvm::Value* equal(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<llvm::ConstantFolder, llvm::IRBuilderDefaultInserter>& builder) override; \
+    llvm::Value* notEqual(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<llvm::ConstantFolder, llvm::IRBuilderDefaultInserter>& builder) override; \
+    llvm::Value* logicalAnd(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<llvm::ConstantFolder, llvm::IRBuilderDefaultInserter>& builder) override; \
+    llvm::Value* logicalOr(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<llvm::ConstantFolder, llvm::IRBuilderDefaultInserter>& builder) override; \
+    llvm::Value* logicalNot(llvm::Value* operand, llvm::IRBuilder<llvm::ConstantFolder, llvm::IRBuilderDefaultInserter>& builder) override; \
+    llvm::Value* increase(llvm::Value* operand, llvm::IRBuilder<llvm::ConstantFolder, llvm::IRBuilderDefaultInserter>& builder) override; \
+    llvm::Value* dot(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<llvm::ConstantFolder, llvm::IRBuilderDefaultInserter>& builder, llvm::Module* module, llvm::LLVMContext& context) override;
+
 
 
 // Strategy pattern for binary operations
@@ -35,27 +37,28 @@ public:
     virtual ~BinaryOp() = default;
 
     // Lookup the operation based on the token kind
-    llvm::Value* perform(llvm::Value* lhs, llvm::Value* rhs, miniC::TokenKind op, llvm::IRBuilder<>& builder);
+    llvm::Value* perform(llvm::Value* lhs, llvm::Value* rhs, miniC::TokenKind op, llvm::IRBuilder<llvm::ConstantFolder, llvm::IRBuilderDefaultInserter>& builder, llvm::Module* module, llvm::LLVMContext& context);
     // Virtual functions for the ops
-    virtual llvm::Value* add(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>& builder) = 0;
-    virtual llvm::Value* sub(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>& builder) = 0;
-    virtual llvm::Value* mul(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>& builder) = 0;
-    virtual llvm::Value* div(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>& builder) = 0;
-    virtual llvm::Value* mod(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>& builder) = 0;
-    virtual llvm::Value* assign(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>& builder) = 0;
-    virtual llvm::Value* bitwiseAnd(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>& builder) = 0;
-    virtual llvm::Value* bitwiseOr(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>& builder) = 0;
-    virtual llvm::Value* bitwiseXor(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>& builder) = 0;
-    virtual llvm::Value* lessThan(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>& builder) = 0;
-    virtual llvm::Value* lessThanEqual(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>& builder) = 0;
-    virtual llvm::Value* greaterThan(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>& builder) = 0;
-    virtual llvm::Value* greaterThanEqual(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>& builder) = 0;
-    virtual llvm::Value* equal(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>& builder) = 0;
-    virtual llvm::Value* notEqual(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>& builder) = 0;
-    virtual llvm::Value* logicalAnd(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>& builder) = 0;
-    virtual llvm::Value* logicalOr(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<>& builder) = 0;
-    virtual llvm::Value* logicalNot(llvm::Value* operand, llvm::IRBuilder<>& builder) = 0;
-    virtual llvm::Value* increase(llvm::Value* operand, llvm::IRBuilder<>& builder) = 0;
+    virtual llvm::Value* add(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<llvm::ConstantFolder, llvm::IRBuilderDefaultInserter>& builder) = 0;
+    virtual llvm::Value* sub(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<llvm::ConstantFolder, llvm::IRBuilderDefaultInserter>& builder) = 0;
+    virtual llvm::Value* mul(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<llvm::ConstantFolder, llvm::IRBuilderDefaultInserter>& builder) = 0;
+    virtual llvm::Value* div(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<llvm::ConstantFolder, llvm::IRBuilderDefaultInserter>& builder) = 0;
+    virtual llvm::Value* mod(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<llvm::ConstantFolder, llvm::IRBuilderDefaultInserter>& builder) = 0;
+    virtual llvm::Value* assign(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<llvm::ConstantFolder, llvm::IRBuilderDefaultInserter>& builder) = 0;
+    virtual llvm::Value* bitwiseAnd(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<llvm::ConstantFolder, llvm::IRBuilderDefaultInserter>& builder) = 0;
+    virtual llvm::Value* bitwiseOr(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<llvm::ConstantFolder, llvm::IRBuilderDefaultInserter>& builder) = 0;
+    virtual llvm::Value* bitwiseXor(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<llvm::ConstantFolder, llvm::IRBuilderDefaultInserter>& builder) = 0;
+    virtual llvm::Value* lessThan(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<llvm::ConstantFolder, llvm::IRBuilderDefaultInserter>& builder) = 0;
+    virtual llvm::Value* lessThanEqual(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<llvm::ConstantFolder, llvm::IRBuilderDefaultInserter>& builder) = 0;
+    virtual llvm::Value* greaterThan(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<llvm::ConstantFolder, llvm::IRBuilderDefaultInserter>& builder) = 0;
+    virtual llvm::Value* greaterThanEqual(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<llvm::ConstantFolder, llvm::IRBuilderDefaultInserter>& builder) = 0;
+    virtual llvm::Value* equal(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<llvm::ConstantFolder, llvm::IRBuilderDefaultInserter>& builder) = 0;
+    virtual llvm::Value* notEqual(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<llvm::ConstantFolder, llvm::IRBuilderDefaultInserter>& builder) = 0;
+    virtual llvm::Value* logicalAnd(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<llvm::ConstantFolder, llvm::IRBuilderDefaultInserter>& builder) = 0;
+    virtual llvm::Value* logicalOr(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<llvm::ConstantFolder, llvm::IRBuilderDefaultInserter>& builder) = 0;
+    virtual llvm::Value* logicalNot(llvm::Value* operand, llvm::IRBuilder<llvm::ConstantFolder, llvm::IRBuilderDefaultInserter>& builder) = 0;
+    virtual llvm::Value* increase(llvm::Value* operand, llvm::IRBuilder<llvm::ConstantFolder, llvm::IRBuilderDefaultInserter>& builder) = 0;
+    virtual llvm::Value* dot(llvm::Value* lhs, llvm::Value* rhs, llvm::IRBuilder<llvm::ConstantFolder, llvm::IRBuilderDefaultInserter>& builder, llvm::Module* module, llvm::LLVMContext& context) = 0;
 }; 
 
 class BinaryOpBuilder {

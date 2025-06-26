@@ -84,6 +84,7 @@ int Parser::getTokenPrecedence(TokenKind op)
     case TokenKind::MinusMinus:
     case TokenKind::Minus:
         return 90;
+    case TokenKind::At:
     case TokenKind::Star:
     case TokenKind::Slash:
     case TokenKind::Percent:

@@ -28,12 +28,18 @@ IRGenerator::IRGenerator()
         {miniC::Type::Void, VoidTy},
         {miniC::Type::Unknown, nullptr}};
 
-    auto *PrintfFT = llvm::FunctionType::get(
+    LibCRegistry["printf"] = llvm::FunctionType::get(
         /*ReturnTy=*/Int32Ty,
         /*Params=*/{Int8PtrTy},
         /*isVarArg=*/true);
-
-    LibCRegistry["printf"] = PrintfFT;
+    LibCRegistry["scanf"] = llvm::FunctionType::get(
+        /*ReturnTy=*/Int32Ty,
+        /*Params=*/{Int8PtrTy},
+        /*isVarArg=*/true);
+    LibCRegistry["cblas_sdot"] = llvm::FunctionType::get(
+        /*ReturnTy=*/FloatTy,
+        /*Params=*/{Int32Ty, Int8PtrTy, Int32Ty, Int8PtrTy, Int32Ty},
+        /*isVarArg=*/false);
 
     TheFPM = std::make_unique<llvm::FunctionPassManager>();
     TheLAM = std::make_unique<llvm::LoopAnalysisManager>();
@@ -208,7 +214,6 @@ Value *IRGenerator::visit(DefStmt &stmt)
     return alloca;
 }
 
-// TODO: This is getting too big and should be refactored
 Value *IRGenerator::visit(BinaryExpr &expr)
 {
     Value *LHS = expr.lhs->accept(*this);
@@ -223,8 +228,8 @@ Value *IRGenerator::visit(BinaryExpr &expr)
     llvm::Type *lhsType = LHS->getType();
     llvm::Type *rhsType = RHS->getType();
 
-    // If it's a pointer, load the value except for assignment, increase or decrease operations
-    if (expr.op != TokenKind::Assign)
+    // If it's a pointer, load the value except for assignment and FULL arrays
+    if (expr.op != TokenKind::Assign && expr.op != TokenKind::At)
     {
         if (auto *allocaLHS = dyn_cast<AllocaInst>(LHS))
         {
@@ -275,8 +280,11 @@ Value *IRGenerator::visit(BinaryExpr &expr)
     }
 
     // use Strategy pattern for binary operations
+    if(expr.op == TokenKind::At){
+        emitLibCFunctionIfNeeded("cblas_sdot");
+    }
     std::unique_ptr<BinaryOp> binOp = BinaryOpBuilder::createBinaryOp(lhsType);
-    llvm::Value *res = binOp->perform(LHS, RHS, expr.op, *builder);
+    llvm::Value *res = binOp->perform(LHS, RHS, expr.op, *builder, module.get(), *context);
     return res ? res : nullptr; // Return result or nullptr on failure
 }
 
@@ -297,7 +305,7 @@ Value *IRGenerator::visit(UnaryExpr &expr)
     }
 
     std::unique_ptr<BinaryOp> binOp = BinaryOpBuilder::createBinaryOp(operandType);
-    llvm::Value *res = binOp->perform(Operand, nullptr, expr.op, *builder);
+    llvm::Value *res = binOp->perform(Operand, nullptr, expr.op, *builder, module.get(), *context);
     return res ? res : nullptr; // Return result or nullptr on failure
 }
 
