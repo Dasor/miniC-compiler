@@ -144,7 +144,7 @@ Value *IRGenerator::visit(LiteralExpr &expr)
         Constant *strConst = ConstantDataArray::getString(*context, expr.value, true);
         GlobalVariable *strVar = new GlobalVariable(
             *module, strConst->getType(), true, llvm::GlobalValue::PrivateLinkage,
-            strConst, ".str." + expr.value);
+            strConst, ".str.");
         // Create a pointer to the string constant
         Value *strPtr = builder->CreateConstGEP2_32(
             strVar->getValueType(), strVar, 0, 0, "strptr");
@@ -830,4 +830,8 @@ bool UnaryExpr::typeCheck()
 bool ArrayAccessExpr::typeCheck()
 {
     return true;
+}
+
+void IRGenerator::printIR(){
+    module->print(llvm::errs(), nullptr);
 }

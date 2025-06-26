@@ -146,12 +146,24 @@ Token Lexer::lexNumber() {
 
 Token Lexer::lexStringLiteral() {
     advance(); // skip opening quote
-    size_t start = index;
+    std::string text;
     while (!isAtEnd() && currentChar() != '"') {
-        if (currentChar() == '\\') advance(); // skip escape character
+        if (currentChar() == '\\') {
+            advance(); // skip escape character
+            if (!isAtEnd()) {
+                switch (currentChar()) {
+                    case 'n': text += '\n'; break;
+                    case 't': text += '\t'; break;
+                    case '\\': text += '\\'; break;
+                    case '"': text += '"'; break;
+                    default: text += currentChar(); break;
+                }
+            }
+        } else {
+            text += currentChar();
+        }
         advance();
     }
-    std::string text = source.substr(start, index - start);
     advance(); // skip closing quote
     return Token(TokenKind::StringLiteral, text, line, column);
 }

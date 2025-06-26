@@ -324,7 +324,7 @@ namespace miniC
         llvm::Function *emitLibCFunctionIfNeeded(const std::string &name);
 
         // Additional methods for IR generation
-        void generateIR(const std::vector<std::unique_ptr<ASTNode>> &astNodes);
+        void printIR();
     };
 
 } // namespace miniC

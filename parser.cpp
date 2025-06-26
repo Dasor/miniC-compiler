@@ -573,13 +573,7 @@ void Parser::MainLoop()
         {
             if (auto FnAST = parseFunction())
             {
-                if (auto FnIR = FnAST->accept(visitor))
-                {
-                    // Handle the generated IR for the function
-                    // fprintf(stderr, "Generated IR for function: %s\n", FnAST->proto->name.c_str());
-                    FnIR->print(llvm::errs());
-                    fprintf(stderr, "\n");
-                }
+                FnAST->accept(visitor); // Generate IR for the function
             }
         }
         else if (currentToken.kind == TokenKind::Identifier || currentToken.kind == TokenKind::IntegerLiteral ||
@@ -593,4 +587,5 @@ void Parser::MainLoop()
             throw std::runtime_error("Unexpected token: " + currentToken.lexeme);
         }
     }
+    visitor.printIR(); // Print the generated IR after each function
 }

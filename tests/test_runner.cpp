@@ -37,12 +37,41 @@ int run_test(const std::string &input_path)
     return WEXITSTATUS(run_result);
 }
 
+std::string run_test_str(const std::string &input_path)
+{
+    const std::string tmp_ir = "tmp.ll";
+    compile(input_path);
+    // Run lli on the generated IR
+    std::string run_cmd = "lli " + tmp_ir + " > output.txt";
+    int run_result = std::system(run_cmd.c_str());
+
+    // Read the output file
+    std::ifstream output_file("output.txt");
+    std::string output;
+    std::getline(output_file, output);
+
+    // Clean up if needed (optional)
+    std::remove(tmp_ir.c_str());
+    std::remove("output.txt");
+
+    // Return the output string
+    return output;
+
+}
 
 int read_expected(const std::string &file_path)
 {
     std::ifstream f(file_path);
     int val;
     f >> val;
+    return val;
+}
+
+std::string read_expected_str(const std::string &file_path)
+{
+    std::ifstream f(file_path);
+    std::string val;
+    std::getline(f, val);
     return val;
 }
 
@@ -128,6 +157,29 @@ TEST_CASE("Compiler handles basic arrays", "[compiler]")
         {
             int expected = read_expected(expected_file);
             int actual = run_test(entry.path());
+            REQUIRE(actual == expected);
+        }
+    }
+}
+
+// test to check for stdout
+TEST_CASE("Compiler handles stdout", "[compiler]")
+{
+    fs::path case_dir = "tests/cases/io";
+    fs::path expected_dir = "tests/expected/io";
+
+    for (const auto &entry : fs::directory_iterator(case_dir))
+    {
+        if (entry.path().extension() != ".c")
+            continue;
+
+        std::string name = entry.path().stem(); // e.g. "basic_add"
+        fs::path expected_file = expected_dir / (name + ".txt");
+
+        SECTION("Test case: " + name)
+        {
+            std::string expected = read_expected_str(expected_file);
+            std::string actual = run_test_str(entry.path());
             REQUIRE(actual == expected);
         }
     }
